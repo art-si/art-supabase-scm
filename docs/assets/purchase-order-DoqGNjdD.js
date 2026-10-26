@@ -1,1 +1,0 @@
-import{Ui as e,Zi as t,ha as n}from"./sys-B7NrqoKO.js";import{t as r}from"./purchase-workspace-BZbItIFf.js";var i=t({name:`ScmPurchaseOrder`,__name:`index`,setup(t){return(t,i)=>(n(),e(r,{kind:`purchase_order`,"prepayment-permission":`ScmPurchaseOrder:Push`}))}});export{i as default};

@@ -21,6 +21,19 @@
           <BusinessTableWorkspaceActions :table="tableRef" />
         </template>
       </BusinessWorkspaceHeader>
+      <ElAlert
+        v-if="linkedDocumentError"
+        class="mb-4!"
+        type="error"
+        title="关联采购单据暂未打开"
+        :closable="false"
+        show-icon
+      >
+        <span>请核对单据类型、租户与查看权限，原链接已保留。</span>
+        <ElButton type="primary" link @click="retryLinkedDocument"
+          ><ArtSvgIcon icon="ri:refresh-line" />重新打开采购单据</ElButton
+        >
+      </ElAlert>
       <ArtTableQuery
         ref="tableRef"
         v-model="search"
@@ -30,6 +43,7 @@
         :header-actions="headerActions"
         :selection-actions="selectionActions"
         header-actions-placement="workspace"
+        refresh-feedback="icon"
         :search-bar-props="{ span: 6, labelWidth: 82, showExpand: true }"
         :table-props="{
           rowKey: getDocumentDetailRowKey,
@@ -81,6 +95,7 @@
   import { useMasterDataDeleteProcessingContext } from '@/hooks/core/useMasterDataDeleteProcessing'
   import MasterDeleteProcessingNotice from '@/components/business/master-delete-processing-notice/index.vue'
   import { useAuth } from '@/hooks/core/useAuth'
+  import { useRouteDocumentDrawer } from '@/hooks/core/useRouteDocumentDrawer'
   import ArtButtonMore, {
     type ButtonMoreItem
   } from '@/components/core/forms/art-button-more/index.vue'
@@ -103,6 +118,7 @@
   import type { ColumnOption } from '@/types'
   import { formatCurrencyValue } from '@/utils/ui/format'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
+  import { getWmsMaterialUnitFactor } from '@/utils/wms/material-quantity'
   import {
     getDocumentDetailRowKey,
     documentGroupSpan,
@@ -225,6 +241,22 @@
     }) => Promise<void>
   }>()
   const drawerRef = ref<{ handleOpen: (record: ScmPurchaseDocument) => Promise<void> }>()
+  const { error: linkedDocumentError, retry: retryLinkedDocument } = useRouteDocumentDrawer({
+    routeName: () => config.value.menuName,
+    queryKey: 'recordId',
+    canOpen: () => hasAuth(config.value.permissions.View),
+    fetchDocument: async (id) => {
+      const result = await fetchScmPurchaseDocument(id)
+      if (result.error) throw result.error
+      if (!result.data || result.data.id !== id || result.data.kind !== props.kind)
+        throw new Error('采购单据不存在、类型不符或暂无查看权限')
+      return result.data
+    },
+    openDocument: async (record) => {
+      if (!drawerRef.value) throw new Error('采购详情尚未就绪，请重试')
+      await drawerRef.value.handleOpen(record)
+    }
+  })
   const inboundDrawerRef = ref<InstanceType<typeof WmsPurchaseDocumentDrawer>>()
   const search = ref<ScmPurchaseQuery & { displayMode: 'document' | 'line' }>({
     keyword: '',
@@ -1418,27 +1450,25 @@
         taxRate > 100
       )
         throw new Error(`${at}单价或税率无效`)
-      const factor =
-        material.purchaseUnitId && material.purchaseUnitId !== material.baseUnitId
-          ? material.unitConversions?.find((item) => item.sourceUnitId === material.purchaseUnitId)
-          : null
-      if (factor && (factor.sourceFactor <= 0 || factor.baseFactor <= 0))
-        throw new Error(`${at}物料单位换算关系无效`)
-      if (material.purchaseUnitId && material.purchaseUnitId !== material.baseUnitId && !factor)
-        throw new Error(`${at}物料缺少采购单位换算关系`)
-      const baseQuantity =
-        Math.round(quantity * (factor ? factor.baseFactor / factor.sourceFactor : 1) * 1000) / 1000
-      const unitFactor = (unitId?: string | null): number | null => {
-        if (!unitId || unitId === material.baseUnitId) return 1
-        const conversion = material.unitConversions?.find((item) => item.sourceUnitId === unitId)
-        if (!conversion || conversion.sourceFactor <= 0 || conversion.baseFactor <= 0) return null
-        return conversion.baseFactor / conversion.sourceFactor
+      const purchaseFactor = material.purchaseUnitId
+        ? getWmsMaterialUnitFactor(material, material.purchaseUnitId)
+        : 1
+      if (purchaseFactor === null) {
+        const hasConversion = material.unitConversions?.some(
+          (item) => item.sourceUnitId === material.purchaseUnitId
+        )
+        throw new Error(
+          hasConversion ? `${at}物料单位换算关系无效` : `${at}物料缺少采购单位换算关系`
+        )
       }
-      const stockFactor = unitFactor(material.inventoryUnitId)
+      const baseQuantity = Math.round(quantity * purchaseFactor * 1000) / 1000
+      const stockFactor = material.inventoryUnitId
+        ? getWmsMaterialUnitFactor(material, material.inventoryUnitId)
+        : 1
       if (!stockFactor) throw new Error(`${at}物料缺少库存单位换算关系`)
       const stockQuantity = Math.round((baseQuantity / stockFactor) * 1000) / 1000
-      const auxiliaryFactor = unitFactor(material.auxiliaryUnitId)
-      const auxiliaryFactor2 = unitFactor(material.auxiliaryUnit2Id)
+      const auxiliaryFactor = getWmsMaterialUnitFactor(material, material.auxiliaryUnitId)
+      const auxiliaryFactor2 = getWmsMaterialUnitFactor(material, material.auxiliaryUnit2Id)
       if (material.auxiliaryUnitId && !auxiliaryFactor)
         throw new Error(`${at}物料缺少辅助单位换算关系`)
       if (material.auxiliaryUnit2Id && !auxiliaryFactor2)
@@ -1653,16 +1683,6 @@
     const taxRates = new Set(
       (userStore.getDictMap?.scmTaxRate ?? []).map((item) => Number(item.value))
     )
-    const unitFactor = (
-      material: NonNullable<ReturnType<typeof materialByCode.get>>,
-      unitId?: string | null
-    ) => {
-      if (!unitId || unitId === material.baseUnitId) return 1
-      const relation = material.unitConversions?.find((item) => item.sourceUnitId === unitId)
-      return relation?.sourceFactor && relation.baseFactor > 0
-        ? relation.baseFactor / relation.sourceFactor
-        : null
-    }
     const groups = new Map<
       string,
       {
@@ -1699,9 +1719,11 @@
         !taxRates.has(taxRate)
       )
         throw new Error(`${at}数量、四位单价或税率无效`)
-      const purchaseFactor = unitFactor(material, material.purchaseUnitId)
-      const auxiliaryFactor = unitFactor(material, material.auxiliaryUnitId)
-      const auxiliaryFactor2 = unitFactor(material, material.auxiliaryUnit2Id)
+      const purchaseFactor = material.purchaseUnitId
+        ? getWmsMaterialUnitFactor(material, material.purchaseUnitId)
+        : 1
+      const auxiliaryFactor = getWmsMaterialUnitFactor(material, material.auxiliaryUnitId)
+      const auxiliaryFactor2 = getWmsMaterialUnitFactor(material, material.auxiliaryUnit2Id)
       if (
         !purchaseFactor ||
         (material.auxiliaryUnitId && !auxiliaryFactor) ||

@@ -719,6 +719,7 @@
   import { findPurchaseContractPrice } from '@scm/api/purchase-contract-pricing'
   import ArtButtonMore from '@/components/core/forms/art-button-more/index.vue'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
+  import { getWmsMaterialUnitFactor } from '@/utils/wms/material-quantity'
   import { replaceReactiveModel } from '@/utils/form/model'
   import { useUnitDisplayNames } from '@/hooks/core/useUnitDisplayNames'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
@@ -2531,12 +2532,6 @@
   function nextLineNo(): number {
     return Math.max(0, ...lines.value.map((line) => Number(line.lineNo) || 0)) + 10
   }
-  function conversionFactor(material: ScmMaterialOption, unitId?: string | null): number | null {
-    if (!unitId || unitId === material.baseUnitId) return 1
-    const conversion = material.unitConversions?.find((item) => item.sourceUnitId === unitId)
-    if (!conversion || conversion.sourceFactor <= 0 || conversion.baseFactor <= 0) return null
-    return conversion.baseFactor / conversion.sourceFactor
-  }
   function sourceUnitFactor(material: ScmMaterialOption, unitName: string): number | null {
     if (!unitName || unitName === material.baseUnitName || unitName === material.unit) return 1
     const sourceUnitId = [
@@ -2547,7 +2542,7 @@
       [material.auxiliaryUnit2, material.auxiliaryUnit2Id]
     ].find(([name]) => name === unitName)?.[1]
     if (!sourceUnitId) return null
-    return conversionFactor(material, sourceUnitId)
+    return getWmsMaterialUnitFactor(material, sourceUnitId)
   }
   function toPurchaseUnit(
     material: ScmMaterialOption,
@@ -2556,7 +2551,9 @@
     sourceUnit: string
   ): { quantity: number; unitPrice: number } | null {
     const sourceFactor = sourceUnitFactor(material, sourceUnit)
-    const purchaseFactor = conversionFactor(material, material.purchaseUnitId)
+    const purchaseFactor = material.purchaseUnitId
+      ? getWmsMaterialUnitFactor(material, material.purchaseUnitId)
+      : 1
     if (!sourceFactor || !purchaseFactor) return null
     const convertedQuantity = Math.round(((quantity * sourceFactor) / purchaseFactor) * 1000) / 1000
     if (convertedQuantity <= 0) return null
@@ -2569,19 +2566,23 @@
     if (kind.value !== 'receipt_notice') return
     const material = materials.value.find((item) => item.id === line.materialId)
     if (!material) return
-    const baseFactor = conversionFactor(material, material.purchaseUnitId)
+    const baseFactor = material.purchaseUnitId
+      ? getWmsMaterialUnitFactor(material, material.purchaseUnitId)
+      : 1
     const baseQuantity =
       baseFactor === null ? 0 : Math.round(Number(line.quantity) * baseFactor * 1000) / 1000
     line.baseUnit = material.unit || ''
     line.stockUnit = material.stockUnit || material.unit || ''
     line.baseQuantity = baseQuantity
-    const stockFactor = conversionFactor(material, material.inventoryUnitId)
+    const stockFactor = material.inventoryUnitId
+      ? getWmsMaterialUnitFactor(material, material.inventoryUnitId)
+      : 1
     line.stockQuantity =
       stockFactor === null ? 0 : Math.round((baseQuantity / stockFactor) * 1000) / 1000
     line.auxiliaryUnit = material.auxiliaryUnit || ''
     line.auxiliaryUnit2 = material.auxiliaryUnit2 || ''
-    const firstFactor = conversionFactor(material, material.auxiliaryUnitId)
-    const secondFactor = conversionFactor(material, material.auxiliaryUnit2Id)
+    const firstFactor = getWmsMaterialUnitFactor(material, material.auxiliaryUnitId)
+    const secondFactor = getWmsMaterialUnitFactor(material, material.auxiliaryUnit2Id)
     line.auxiliaryQuantity =
       material.auxiliaryUnitId && firstFactor
         ? Math.round((baseQuantity / firstFactor) * 1000) / 1000
@@ -2637,19 +2638,23 @@
     if (kind.value !== 'purchase_order') return
     const material = materials.value.find((item) => item.id === line.materialId)
     if (!material) return
-    const purchaseFactor = conversionFactor(material, material.purchaseUnitId)
+    const purchaseFactor = material.purchaseUnitId
+      ? getWmsMaterialUnitFactor(material, material.purchaseUnitId)
+      : 1
     const baseQuantity =
       purchaseFactor === null ? 0 : Math.round(Number(line.quantity) * purchaseFactor * 1000) / 1000
     line.baseUnit = material.baseUnitName || material.unit || ''
     line.stockUnit = material.stockUnit || line.baseUnit
     line.baseQuantity = baseQuantity
     if (line.sourceLineId && !line.purchaseContractLineId) line.sourceQuantity = baseQuantity
-    const stockFactor = conversionFactor(material, material.inventoryUnitId)
+    const stockFactor = material.inventoryUnitId
+      ? getWmsMaterialUnitFactor(material, material.inventoryUnitId)
+      : 1
     line.stockQuantity = stockFactor ? Math.round((baseQuantity / stockFactor) * 1000) / 1000 : 0
     line.auxiliaryUnit = material.auxiliaryUnit || ''
     line.auxiliaryUnit2 = material.auxiliaryUnit2 || ''
-    const firstFactor = conversionFactor(material, material.auxiliaryUnitId)
-    const secondFactor = conversionFactor(material, material.auxiliaryUnit2Id)
+    const firstFactor = getWmsMaterialUnitFactor(material, material.auxiliaryUnitId)
+    const secondFactor = getWmsMaterialUnitFactor(material, material.auxiliaryUnit2Id)
     line.auxiliaryQuantity =
       material.auxiliaryUnitId && firstFactor
         ? Math.round((baseQuantity / firstFactor) * 1000) / 1000

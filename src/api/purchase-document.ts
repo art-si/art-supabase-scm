@@ -661,6 +661,7 @@ async function attachOrderProgress(row: ScmPurchaseDocument) {
 }
 
 export async function fetchScmPurchaseDocument(id: string) {
+  const assertScope = createTenantScopeReadGuard()
   const result = await responseHandle<ScmPurchaseDocument>(
     () => supabase.from('scm_purchase_document').select(documentSelect).eq('id', id).single(),
     { breakReturn: true, showErrorMessage: true, errorMessage: '采购单据详情加载失败，请稍后重试' }
@@ -678,6 +679,7 @@ export async function fetchScmPurchaseDocument(id: string) {
           ? await attachOrderProgress(rows[0])
           : rows[0]
   }
+  assertScope()
   return result
 }
 
