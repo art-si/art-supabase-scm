@@ -1,4 +1,5 @@
 import type { ScmDocumentLine, ScmMaterialOption } from '@scm/api'
+import { getWmsMaterialUnitFactor } from '@/utils/wms/material-quantity'
 
 const roundMoney = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100
 const roundUnitPrice = (value: number): number =>
@@ -41,8 +42,11 @@ export function contractAuxiliaryQuantity(
   unitId: string | null | undefined,
   material: ScmMaterialOption | undefined
 ): number | undefined {
-  if (!unitId || !material || quantity == null) return undefined
+  if (!unitId || !material || quantity == null || !Number.isFinite(quantity)) return undefined
   const conversion = material.unitConversions?.find((item) => item.sourceUnitId === unitId)
-  if (!conversion || conversion.baseFactor <= 0 || conversion.sourceFactor <= 0) return undefined
-  return Math.round((quantity * conversion.sourceFactor * 1000) / conversion.baseFactor) / 1000
+  if (!conversion || getWmsMaterialUnitFactor({ unitConversions: [conversion] }, unitId) === null)
+    return undefined
+  const converted =
+    Math.round((quantity * conversion.sourceFactor * 1000) / conversion.baseFactor) / 1000
+  return Number.isFinite(converted) ? converted : undefined
 }
