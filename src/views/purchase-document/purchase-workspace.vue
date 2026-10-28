@@ -157,7 +157,6 @@
   const { loadUnitDisplayNames, unitDisplayName } = useUnitDisplayNames()
   const props = defineProps<{ kind: ScmPurchaseKind; prepaymentPermission?: string }>()
   const prepaymentDrawerRef = ref<InstanceType<typeof SettlementDocumentDrawer>>()
-  const visibleRows = ref<PurchaseListRow[]>([])
   const lineProperties = new Set([
     'detailLine.lineNo',
     'detailLine.materialCode',
@@ -185,7 +184,12 @@
   }) {
     return displayMode.value === 'line'
       ? column.property
-        ? documentGroupSpan(visibleRows.value, rowIndex, column.property, lineProperties)
+        ? documentGroupSpan(
+            (tableRef.value?.dataState.rows.value as PurchaseListRow[] | undefined) ?? [],
+            rowIndex,
+            column.property,
+            lineProperties
+          )
         : ([1, 1] as [number, number])
       : ([1, 1] as [number, number])
   }
@@ -1014,7 +1018,9 @@
     }))
   }
   function purchaseRows(rows: Array<{ id?: unknown; detailRowId?: unknown }>): PurchaseListRow[] {
-    const currentRows = new Map(visibleRows.value.map((row) => [getDocumentDetailRowKey(row), row]))
+    const acceptedRows =
+      (tableRef.value?.dataState.rows.value as PurchaseListRow[] | undefined) ?? []
+    const currentRows = new Map(acceptedRows.map((row) => [getDocumentDetailRowKey(row), row]))
     return rows
       .map((row) => currentRows.get(String(row.detailRowId ?? row.id)))
       .filter((row): row is PurchaseListRow => Boolean(row))
@@ -1291,9 +1297,7 @@
     const { readDocuments, assertContext } = createDocumentReader()
     const pageQuery = { ...query, ...buildSupabasePageRange(query) }
     if (displayMode.value === 'document') {
-      const result = await readDocuments(pageQuery)
-      visibleRows.value = result.data ?? []
-      return result
+      return readDocuments(pageQuery)
     }
     const documents = await loadAllDocumentPages(readDocuments, pageQuery)
     await loadUnitDisplayNames(documents.map((document) => document.tenantId))
@@ -1304,7 +1308,6 @@
       (line, index) => line.lineId || String(index)
     )
     const result = { ...paginateDetailRows(rows, pageQuery.from, pageQuery.to), error: null }
-    visibleRows.value = result.data
     return result
   }
   async function exportDocuments() {

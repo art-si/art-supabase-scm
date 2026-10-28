@@ -154,7 +154,6 @@
   const { loadUnitDisplayNames, unitDisplayName } = useUnitDisplayNames()
 
   const props = defineProps<{ kind: ScmDocumentKind }>()
-  const visibleRows = ref<SalesListRow[]>([])
   const lineProperties = new Set([
     'detailLine.lineNo',
     'detailLine.materialCode',
@@ -177,7 +176,12 @@
     column: { property?: string }
   }) {
     return displayMode.value === 'line'
-      ? documentGroupSpan(visibleRows.value, rowIndex, column.property, lineProperties)
+      ? documentGroupSpan(
+          (tableRef.value?.dataState.rows.value as SalesListRow[] | undefined) ?? [],
+          rowIndex,
+          column.property,
+          lineProperties
+        )
       : ([1, 1] as [number, number])
   }
   const config = computed(() => scmDocumentConfigs[props.kind])
@@ -1457,7 +1461,6 @@
   async function fetchPage(query: ScmSalesDocumentQuery & { current: number; size: number }) {
     const pageQuery = { ...query, ...buildSupabasePageRange(query) }
     if (displayMode.value === 'document') {
-      visibleRows.value = []
       return fetchScmSalesDocuments(props.kind, pageQuery)
     }
     const documents = await fetchAllDocuments(pageQuery)
@@ -1466,7 +1469,6 @@
       ...paginateDetailRows(expandQuotationLines(documents), pageQuery.from, pageQuery.to),
       error: null
     }
-    visibleRows.value = result.data
     return result
   }
 

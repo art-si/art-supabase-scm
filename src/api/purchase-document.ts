@@ -286,24 +286,6 @@ export async function fetchScmPurchaseBinOptions(tenantId: string) {
   return data ?? []
 }
 
-export async function recommendScmReceiptBin(input: {
-  warehouseId: string
-  materialId: string
-  quantity: number
-}): Promise<string | null> {
-  const { data } = await responseHandle<string | null>(
-    () =>
-      supabase.rpc('wms_recommend_bin_secure', {
-        p_warehouse_id: input.warehouseId,
-        p_material_id: input.materialId,
-        p_quantity: input.quantity,
-        p_area_sqm: null
-      }),
-    { breakReturn: true, showErrorMessage: true, errorMessage: '自动选位失败，请稍后重试' }
-  )
-  return data ?? null
-}
-
 export async function fetchScmPurchaseBinOption(tenantId: string, binId: string) {
   const { data } = await responseHandle<ScmPurchaseBinOption>(
     () =>

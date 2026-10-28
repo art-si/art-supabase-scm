@@ -754,6 +754,7 @@
   import type { ColumnOption } from '@/types'
   import type { DataSelectFetchParams } from '@/components/core/forms/art-data-select/types'
   import type { EmployeeIntegrationItem } from '@/api/integration/employees'
+  import { recommendScmReceiptPlacementBin } from '@/api/scm-receipt-target'
   import { useTenantScopeFormPolicy } from '@/hooks/core/useTenantScopeFormPolicy'
   import { useAuth } from '@/hooks/core/useAuth'
   import { useUserStore } from '@/store/modules/user'
@@ -768,7 +769,6 @@
     fetchScmPurchaseWarehouseOptions,
     fetchScmPurchaseBinOptions,
     fetchScmPurchaseBinOption,
-    recommendScmReceiptBin,
     fetchScmPurchaseCustomerOptions,
     fetchScmReceiptBatchOptions,
     fetchScmPurchaseProjectOptions,
@@ -2612,7 +2612,7 @@
       line.stockQuantity === quantity
     recommendingLineId.value = line.lineId
     try {
-      const binId = await recommendScmReceiptBin({ warehouseId, materialId, quantity })
+      const binId = await recommendScmReceiptPlacementBin({ warehouseId, materialId, quantity })
       if (!stillCurrent()) return
       if (!binId) {
         ElMessage.warning('当前没有符合物料、容量和库区规则的可用库位')
@@ -2628,8 +2628,8 @@
       line.binId = bin.id
       line.location = bin.binName
       ElMessage.success(`已选库位 ${bin.binCode}，收料记账时将再次校验`)
-    } catch {
-      ElMessage.error('自动选位失败，请重试或手动选择库位')
+    } catch (error) {
+      notifyFriendlyError(error, '自动选位失败，请重试或手动选择库位')
     } finally {
       recommendingLineId.value = null
     }

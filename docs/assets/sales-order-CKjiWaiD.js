@@ -1,0 +1,1 @@
+import{Qi as e,Wi as t,ga as n}from"./sys-Da0pIk6w.js";import{t as r}from"./scm-document-workspace-CNRL_W_q.js";var i=e({name:`ScmSalesOrder`,__name:`index`,setup(e){return(e,i)=>(n(),t(r,{kind:`sales_order`}))}});export{i as default};

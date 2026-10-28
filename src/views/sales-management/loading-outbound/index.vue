@@ -136,7 +136,6 @@
   function refreshDisplayMode(): void {
     void tableRef.value?.refreshContext()
   }
-  const visibleRows = ref<LoadingListRow[]>([])
   const eligibleRows = ref<ScmLoadingOutboundRow[]>([])
   const headerActions: ArtTableQueryHeaderAction[] = [
     {
@@ -185,7 +184,7 @@
   }) {
     return displayMode.value === 'line'
       ? documentGroupSpan(
-          visibleRows.value,
+          (tableRef.value?.dataState.rows.value as LoadingListRow[] | undefined) ?? [],
           rowIndex,
           column.property,
           lineProperties,
@@ -325,7 +324,6 @@
     const current = Math.max(1, Number(params.current) || 1)
     const size = Math.max(1, Number(params.size) || 20)
     const pageRows = displayRows.slice((current - 1) * size, current * size)
-    visibleRows.value = displayMode.value === 'line' ? pageRows : []
     return {
       records: pageRows,
       total: displayRows.length,

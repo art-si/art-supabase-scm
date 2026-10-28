@@ -1,1 +1,0 @@
-import{Qi as e,Wi as t,ga as n}from"./sys-CUq2QmHR.js";import{t as r}from"./scm-document-workspace-Dmxl9niG.js";var i=e({name:`ScmShippingNotice`,__name:`index`,setup(e){return(e,i)=>(n(),t(r,{kind:`shipping_notice`}))}});export{i as default};
