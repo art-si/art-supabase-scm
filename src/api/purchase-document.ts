@@ -4,6 +4,8 @@ import { normalizeNonNullableText, normalizeNullableText } from '@/utils/form/no
 import { fetchAllRangePages } from '@/utils/supabase'
 import { createTenantScopeReadGuard } from '@/utils/tenant-scope-context'
 import { buildOrIlikeFilter } from '@/utils/supabase/search'
+import { withRequestOptions } from '@/api/providers/supabase/query'
+import type { ApiFeedbackOptions, ApiRequestOptions } from '@/types/api/request'
 import { toScmPurchaseLinePayload } from './purchase-line-payload'
 import { normalizeQuotationPurchaseLines } from './quotation-purchase-lines'
 import type {
@@ -146,6 +148,8 @@ export interface ScmReceiptOrderLineChoice extends ScmPurchaseLine {
   supplierId: string
 }
 
+type PurchaseReadOptions = ApiRequestOptions & Pick<ApiFeedbackOptions, 'showErrorMessage'>
+
 const { supabase, responseHandle, keysToSnakeDeep } = useSupabase()
 const documentSelect =
   '*,project:mdm_project!scm_purchase_document_project_id_fkey(project_code,project_name),document_type:mdm_document_type!scm_purchase_document_document_type_id_fkey(document_type_name)'
@@ -286,17 +290,27 @@ export async function fetchScmPurchaseBinOptions(tenantId: string) {
   return data ?? []
 }
 
-export async function fetchScmPurchaseBinOption(tenantId: string, binId: string) {
+export async function fetchScmPurchaseBinOption(
+  tenantId: string,
+  binId: string,
+  options?: PurchaseReadOptions
+) {
   const { data } = await responseHandle<ScmPurchaseBinOption>(
     () =>
-      supabase
-        .from('mdm_warehouse_bin')
-        .select('id,warehouse_id,bin_code,bin_name,supports_serial')
-        .eq('tenant_id', tenantId)
-        .eq('id', binId)
-        .eq('status', 'available')
-        .single(),
-    { breakReturn: true, showErrorMessage: true, errorMessage: '推荐库位加载失败，请稍后重试' }
+      withRequestOptions(
+        supabase
+          .from('mdm_warehouse_bin')
+          .select('id,warehouse_id,bin_code,bin_name,supports_serial')
+          .eq('tenant_id', tenantId)
+          .eq('id', binId)
+          .eq('status', 'available'),
+        options
+      ).single(),
+    {
+      breakReturn: true,
+      showErrorMessage: options?.showErrorMessage ?? true,
+      errorMessage: '推荐库位加载失败，请稍后重试'
+    }
   )
   return data
 }
@@ -455,7 +469,8 @@ type PurchaseChild = Pick<
 async function fetchPurchaseChildren(
   kind: ScmPurchaseKind,
   sourceIds: string[],
-  tenantIds: string[] = []
+  tenantIds: string[] = [],
+  options?: PurchaseReadOptions
 ) {
   if (!sourceIds.length) return [] as PurchaseChild[]
   const result = await fetchAllRangePages<PurchaseChild>(({ from, to }) => {
@@ -469,9 +484,9 @@ async function fetchPurchaseChildren(
     if (kind === 'purchase_order') {
       if (tenantIds.length) request = request.in('tenant_id', tenantIds)
     } else request = request.in('source_id', sourceIds)
-    return responseHandle<PurchaseChild[]>(() => request, {
+    return responseHandle<PurchaseChild[]>(() => withRequestOptions(request, options), {
       breakReturn: true,
-      showErrorMessage: true,
+      showErrorMessage: options?.showErrorMessage ?? true,
       errorMessage: '来源数量加载失败，请稍后重试'
     })
   })
@@ -479,19 +494,26 @@ async function fetchPurchaseChildren(
   return result.data ?? []
 }
 
-async function fetchReceiptDocuments(tenantId: string) {
+async function fetchReceiptDocuments(tenantId: string, options?: PurchaseReadOptions) {
   const result = await fetchAllRangePages<PurchaseChild>(({ from, to }) =>
     responseHandle<PurchaseChild[]>(
       () =>
-        supabase
-          .from('scm_purchase_document')
-          .select('id,source_id,status,lines,document_date')
-          .eq('tenant_id', tenantId)
-          .eq('kind', 'receipt_notice')
-          .neq('status', 'cancelled')
-          .order('id')
-          .range(from, to),
-      { breakReturn: true, showErrorMessage: true, errorMessage: '已收料数量加载失败，请稍后重试' }
+        withRequestOptions(
+          supabase
+            .from('scm_purchase_document')
+            .select('id,source_id,status,lines,document_date')
+            .eq('tenant_id', tenantId)
+            .eq('kind', 'receipt_notice')
+            .neq('status', 'cancelled')
+            .order('id')
+            .range(from, to),
+          options
+        ),
+      {
+        breakReturn: true,
+        showErrorMessage: options?.showErrorMessage ?? true,
+        errorMessage: '已收料数量加载失败，请稍后重试'
+      }
     )
   )
   if (result.error) throw result.error
@@ -501,7 +523,8 @@ async function fetchReceiptDocuments(tenantId: string) {
 export async function fetchScmReceiptOrderLineChoices(
   tenantId: string,
   supplierId: string,
-  projectId?: string
+  projectId?: string,
+  options?: PurchaseReadOptions
 ): Promise<ScmReceiptOrderLineChoice[]> {
   const [orderResult, receipts] = await Promise.all([
     fetchAllRangePages<ScmPurchaseDocument>(({ from, to }) => {
@@ -515,13 +538,13 @@ export async function fetchScmReceiptOrderLineChoices(
         .order('id')
         .range(from, to)
       if (projectId) request = request.eq('project_id', projectId)
-      return responseHandle<ScmPurchaseDocument[]>(() => request, {
+      return responseHandle<ScmPurchaseDocument[]>(() => withRequestOptions(request, options), {
         breakReturn: true,
-        showErrorMessage: true,
+        showErrorMessage: options?.showErrorMessage ?? true,
         errorMessage: '采购订单明细加载失败，请稍后重试'
       })
     }),
-    fetchReceiptDocuments(tenantId)
+    fetchReceiptDocuments(tenantId, options)
   ])
   if (orderResult.error) throw orderResult.error
   const used = new Map<string, number>()
@@ -845,10 +868,13 @@ export async function fetchScmPurchaseSourceOptions(kind: ScmPurchaseKind, tenan
   return result
 }
 
-export async function fetchScmPurchaseRemainingLines(source: ScmPurchaseDocument) {
+export async function fetchScmPurchaseRemainingLines(
+  source: ScmPurchaseDocument,
+  options?: PurchaseReadOptions
+) {
   const childKind: ScmPurchaseKind =
     source.kind === 'purchase_request' ? 'purchase_order' : 'receipt_notice'
-  const data = await fetchPurchaseChildren(childKind, [source.id], [source.tenantId])
+  const data = await fetchPurchaseChildren(childKind, [source.id], [source.tenantId], options)
   const used = new Map<string, number>()
   for (const document of data)
     for (const line of document.lines)

@@ -634,7 +634,7 @@
       </ElSelect>
     </template>
   </ArtDialog>
-  <ArtDialog ref="sourceLineDialogRef" size="lg">
+  <ArtDialog ref="sourceLineDialogRef" size="lg" @close="invalidateSourceSelection">
     <ElAlert v-if="sourceLineLoadError" type="error" :closable="false" show-icon>
       <template #title>来源明细加载失败</template>
       <ElButton link type="primary" @click="loadSourceLines">重新加载</ElButton>
@@ -702,12 +702,14 @@
     empty-text="暂无可参选的采购订单明细"
     empty-description="请先确认供应商，再检查采购订单的审核状态与剩余交货数量。"
     @confirm="confirmReceiptOrderLines"
+    @close="invalidateSourceSelection"
   >
     <template #trigger><span class="sr-only">参选采购订单</span></template>
   </ArtTableMultipleSelect>
 </template>
 
 <script setup lang="tsx">
+  import { onBeforeUnmount } from 'vue'
   import {
     lineTotal as purchaselineTotal,
     lineSubtotal as purchaselineSubtotal,
@@ -756,8 +758,10 @@
   import type { EmployeeIntegrationItem } from '@/api/integration/employees'
   import { recommendScmReceiptPlacementBin } from '@/api/scm-receipt-target'
   import { useTenantScopeFormPolicy } from '@/hooks/core/useTenantScopeFormPolicy'
+  import { useTenantOperationGuard } from '@/hooks/core/useTenantOperationGuard'
   import { useAuth } from '@/hooks/core/useAuth'
   import { useUserStore } from '@/store/modules/user'
+  import { useTenantScopeStore } from '@/store/modules/tenant-scope'
   import { formatCurrencyValue } from '@/utils/ui/format'
   import {
     createScmPurchaseDocument,
@@ -836,6 +840,8 @@
   const { loadUnitDisplayNames, unitDisplayName } = useUnitDisplayNames()
   const emit = defineEmits<{ success: [mode: 'add' | 'edit'] }>()
   const userStore = useUserStore()
+  const captureDialogScope = useTenantOperationGuard()
+  const tenantScopeStore = useTenantScopeStore()
   const { hasAuth } = useAuth()
   const { shouldExposeTenantField, defaultWriteTenantId } = useTenantScopeFormPolicy()
   const dialogRef = ref<ArtDialogExpose<OpenOptions>>()
@@ -883,6 +889,8 @@
   const warehouses = ref<ScmPurchaseWarehouseOption[]>([])
   const bins = ref<ScmPurchaseBinOption[]>([])
   const recommendingLineId = ref<string | null>(null)
+  let recommendationGeneration = 0
+  let recommendationController: AbortController | undefined
   const customers = ref<ScmPurchaseCustomerOption[]>([])
   const documentTypes = ref<ScmDocumentTypeOption[]>([])
   const sourceDocuments = ref<ScmPurchaseDocument[]>([])
@@ -912,6 +920,16 @@
   const sourceLineDateRange = ref<string[]>([])
   const selectAfterSupplier = ref(false)
   const receiptSourceOrderId = ref('')
+  interface ReceiptSourceContext {
+    tenantId: string
+    supplierId: string
+    projectId: string
+    sourceOrderId: string
+    isScopeCurrent: () => boolean
+  }
+  let receiptSourceContext: ReceiptSourceContext | null = null
+  let sourceSelectionGeneration = 0
+  let sourceSelectionController: AbortController | undefined
   const activeTab = ref('lines')
   const loading = ref(false)
   const recentPricesLoading = ref(false)
@@ -2603,7 +2621,17 @@
       ElMessage.warning('请先选择仓库、物料并填写收料数量')
       return
     }
+    const generation = ++recommendationGeneration
+    const controller = new AbortController()
+    recommendationController = controller
+    const revision = openRevision
+    const isScopeCurrent = captureDialogScope()
     const stillCurrent = () =>
+      generation === recommendationGeneration &&
+      !controller.signal.aborted &&
+      revision === openRevision &&
+      isScopeCurrent() &&
+      Boolean(unref(dialogRef.value?.visible)) &&
       kind.value === 'receipt_notice' &&
       header.tenantId === tenantId &&
       lines.value.includes(line) &&
@@ -2612,7 +2640,10 @@
       line.stockQuantity === quantity
     recommendingLineId.value = line.lineId
     try {
-      const binId = await recommendScmReceiptPlacementBin({ warehouseId, materialId, quantity })
+      const binId = await recommendScmReceiptPlacementBin(
+        { warehouseId, materialId, quantity },
+        { signal: controller.signal, showErrorMessage: false }
+      )
       if (!stillCurrent()) return
       if (!binId) {
         ElMessage.warning('当前没有符合物料、容量和库区规则的可用库位')
@@ -2620,7 +2651,11 @@
       }
       let bin = bins.value.find((item) => item.id === binId)
       if (!bin) {
-        bin = (await fetchScmPurchaseBinOption(tenantId, binId)) ?? undefined
+        bin =
+          (await fetchScmPurchaseBinOption(tenantId, binId, {
+            signal: controller.signal,
+            showErrorMessage: false
+          })) ?? undefined
         if (!stillCurrent()) return
         if (bin) bins.value.push(bin)
       }
@@ -2629,10 +2664,19 @@
       line.location = bin.binName
       ElMessage.success(`已选库位 ${bin.binCode}，收料记账时将再次校验`)
     } catch (error) {
-      notifyFriendlyError(error, '自动选位失败，请重试或手动选择库位')
+      if (stillCurrent()) notifyFriendlyError(error, '自动选位失败，请重试或手动选择库位')
     } finally {
-      recommendingLineId.value = null
+      if (generation === recommendationGeneration) {
+        recommendingLineId.value = null
+        recommendationController = undefined
+      }
     }
+  }
+  function invalidateRecommendation(): void {
+    recommendationGeneration++
+    recommendationController?.abort()
+    recommendationController = undefined
+    recommendingLineId.value = null
   }
   function recalculateOrderUnits(line: ScmPurchaseLine): void {
     if (kind.value !== 'purchase_order') return
@@ -2825,21 +2869,63 @@
       lines.value.push(newLine(option))
     }
   }
+  function invalidateSourceSelection(): void {
+    sourceSelectionGeneration++
+    sourceSelectionController?.abort()
+    sourceSelectionController = undefined
+    receiptSourceContext = null
+    availableSourceLines.value = []
+    selectedSourceLineIds.value = []
+    receiptSourceLoading.value = false
+    sourceLineLoadError.value = false
+  }
+  function beginSourceSelection(): { generation: number; signal: AbortSignal } {
+    invalidateSourceSelection()
+    const controller = new AbortController()
+    sourceSelectionController = controller
+    return { generation: sourceSelectionGeneration, signal: controller.signal }
+  }
+  function isCurrentReceiptSource(context: ReceiptSourceContext, generation: number): boolean {
+    return (
+      generation === sourceSelectionGeneration &&
+      !sourceSelectionController?.signal.aborted &&
+      header.tenantId === context.tenantId &&
+      header.supplierId === context.supplierId &&
+      header.projectId === context.projectId &&
+      receiptSourceOrderId.value === context.sourceOrderId &&
+      context.isScopeCurrent()
+    )
+  }
   async function loadSourceLines(): Promise<void> {
     const source = sourceLineSource.value
     if (!source) return
+    const revision = openRevision
+    const isScopeCurrent = captureDialogScope()
+    const { generation, signal } = beginSourceSelection()
+    const isCurrent = () =>
+      generation === sourceSelectionGeneration &&
+      revision === openRevision &&
+      isScopeCurrent() &&
+      !signal.aborted &&
+      sourceLineSource.value === source &&
+      header.tenantId === source.tenantId &&
+      header.sourceId === source.id
     sourceLineLoadError.value = false
     sourceLineDialogRef.value?.setLoading(true)
     try {
-      const available = await fetchScmPurchaseRemainingLines(source)
+      const available = await fetchScmPurchaseRemainingLines(source, {
+        signal,
+        showErrorMessage: false
+      })
+      if (!isCurrent()) return
       availableSourceLines.value = available.filter(
         (line) => !lines.value.some((current) => current.sourceLineId === line.sourceLineId)
       )
       if (!availableSourceLines.value.length) ElMessage.warning('来源单据已无未转换数量')
     } catch {
-      sourceLineLoadError.value = true
+      if (isCurrent()) sourceLineLoadError.value = true
     } finally {
-      sourceLineDialogRef.value?.setLoading(false)
+      if (isCurrent()) sourceLineDialogRef.value?.setLoading(false)
     }
   }
   async function importSourceLines() {
@@ -2848,28 +2934,45 @@
         ElMessage.warning('请先参选供应商')
         return
       }
-      selectedSourceLineIds.value = []
-      availableSourceLines.value = []
+      const context: ReceiptSourceContext = {
+        tenantId: header.tenantId,
+        supplierId: header.supplierId,
+        projectId: header.projectId,
+        sourceOrderId: receiptSourceOrderId.value,
+        isScopeCurrent: captureDialogScope()
+      }
+      const revision = openRevision
+      const { generation, signal } = beginSourceSelection()
+      const isCurrent = () =>
+        revision === openRevision && isCurrentReceiptSource(context, generation)
       receiptSourceLoading.value = true
       await nextTick()
+      if (!isCurrent()) return
       await receiptOrderSelectRef.value?.open()
+      if (!isCurrent()) return
       try {
         const choices = await fetchScmReceiptOrderLineChoices(
-          header.tenantId,
-          header.supplierId,
-          header.projectId || undefined
+          context.tenantId,
+          context.supplierId,
+          context.projectId || undefined,
+          { signal, showErrorMessage: false }
         )
+        if (!isCurrent()) return
         const missingIds = uniq(choices.map((choice) => choice.materialId)).filter(
           (id) => !materials.value.some((material) => material.id === id)
         )
         if (missingIds.length) {
-          const { data } = await fetchScmMaterialOptions(header.tenantId, missingIds)
+          const { data } = await fetchScmMaterialOptions(context.tenantId, missingIds, {
+            signal,
+            showErrorMessage: false
+          })
+          if (!isCurrent()) return
           materials.value.push(...(data ?? []))
         }
+        receiptSourceContext = context
         availableSourceLines.value = choices.filter(
           (choice) =>
-            (!receiptSourceOrderId.value ||
-              choice.sourcePurchaseDocumentId === receiptSourceOrderId.value) &&
+            (!context.sourceOrderId || choice.sourcePurchaseDocumentId === context.sourceOrderId) &&
             !lines.value.some(
               (line) =>
                 line.sourcePurchaseDocumentId === choice.sourcePurchaseDocumentId &&
@@ -2877,11 +2980,12 @@
             )
         )
         await nextTick()
+        if (!isCurrent()) return
         await receiptOrderSelectRef.value?.reload()
       } catch {
-        ElMessage.warning('采购订单明细加载失败，请重新参选')
+        if (isCurrent()) ElMessage.warning('采购订单明细加载失败，请重新参选')
       } finally {
-        receiptSourceLoading.value = false
+        if (isCurrent()) receiptSourceLoading.value = false
       }
       return
     }
@@ -3002,10 +3106,29 @@
   async function confirmReceiptOrderLines(
     value: string | number | Array<string | number> | undefined
   ): Promise<void> {
+    const context = receiptSourceContext
+    if (
+      !context ||
+      receiptSourceLoading.value ||
+      !isCurrentReceiptSource(context, sourceSelectionGeneration)
+    ) {
+      ElMessage.warning('参选范围已变化，请重新选择采购订单明细')
+      return
+    }
     const selectedIds = Array.isArray(value) ? value.map(String) : []
     const selected = availableSourceLines.value.filter((line) =>
       selectedIds.includes(line.choiceId || '')
     ) as ScmReceiptOrderLineChoice[]
+    if (
+      selected.some(
+        (line) =>
+          line.supplierId !== context.supplierId ||
+          (context.sourceOrderId && line.sourcePurchaseDocumentId !== context.sourceOrderId)
+      )
+    ) {
+      ElMessage.warning('采购订单来源已变化，请重新参选')
+      return
+    }
     if (!selected.length) {
       ElMessage.warning('请选择至少一行采购订单明细')
       return
@@ -3020,6 +3143,7 @@
     }
     header.projectId = selected[0].projectId
     let lineNo = nextLineNo()
+    const addedLineIds: string[] = []
     for (const choice of selected) {
       const line: ScmPurchaseLine = {
         ...omit(choice, ['choiceId', 'projectId', 'projectName', 'supplierId']),
@@ -3030,20 +3154,30 @@
       lineNo += 10
       recalculateReceiptUnits(line)
       lines.value.push(line)
+      addedLineIds.push(line.lineId)
     }
     const revision = openRevision
+    const confirmedProjectId = header.projectId
+    const isCurrent = () =>
+      revision === openRevision &&
+      context.isScopeCurrent() &&
+      kind.value === 'receipt_notice' &&
+      header.tenantId === context.tenantId &&
+      header.supplierId === context.supplierId &&
+      header.projectId === confirmedProjectId &&
+      receiptSourceOrderId.value === context.sourceOrderId &&
+      addedLineIds.every((id) => lines.value.some((line) => line.lineId === id))
     try {
       const ids = uniq(selected.map((line) => line.sourcePurchaseDocumentId).filter(Boolean))
       const orders = await Promise.all(
         ids.map(async (id) => (await fetchScmPurchaseDocument(id!)).data)
       )
-      if (revision !== openRevision) return
+      if (!isCurrent()) return
       inheritReceiptEmployees(
         orders.filter((order): order is ScmPurchaseDocument => Boolean(order))
       )
     } catch {
-      if (revision === openRevision)
-        ElMessage.warning('采购员、库管员未能自动带入，请重新参选或手动选择')
+      if (isCurrent()) ElMessage.warning('采购员、库管员未能自动带入，请重新参选或手动选择')
     }
   }
   async function importQuotationLines(mode: 'all' | 'request' | 'quotation' = 'all') {
@@ -3520,6 +3654,8 @@
   }
   async function handleOpen(options: OpenOptions) {
     const revision = ++openRevision
+    invalidateRecommendation()
+    invalidateSourceSelection()
     recentPricesLoading.value = false
     currentOpenOptions.value = options
     initializationError.value = ''
@@ -3669,6 +3805,8 @@
       onClose: () => {
         ++openRevision
         ++referenceRevision
+        invalidateRecommendation()
+        invalidateSourceSelection()
         loading.value = false
         recentPricesLoading.value = false
       },
@@ -3915,6 +4053,8 @@
     () => header.tenantId,
     (tenantId, previous) => {
       if (preparing || tenantId === previous) return
+      invalidateRecommendation()
+      invalidateSourceSelection()
       header.projectId = ''
       header.documentTypeId = ''
       header.supplierId = ''
@@ -3926,6 +4066,7 @@
   watch(
     () => header.sourceId,
     (sourceId, previous) => {
+      if (!preparing && sourceId !== previous) invalidateSourceSelection()
       if (!preparing && sourceId !== previous)
         lines.value = lines.value.filter((line) => !line.sourceLineId)
       if (!preparing && sourceId && kind.value !== 'purchase_order') void importSourceLines()
@@ -3935,11 +4076,26 @@
     () => header.supplierId,
     (supplierId, previous) => {
       if (preparing || kind.value !== 'receipt_notice' || supplierId === previous) return
+      invalidateSourceSelection()
       lines.value = lines.value.filter((line) => !line.sourcePurchaseDocumentId)
       if (supplierId && selectAfterSupplier.value) {
         selectAfterSupplier.value = false
         void importSourceLines()
       }
+    }
+  )
+  watch(
+    () => header.projectId,
+    (projectId, previous) => {
+      if (!preparing && kind.value === 'receipt_notice' && projectId !== previous)
+        invalidateSourceSelection()
+    }
+  )
+  watch(
+    () => tenantScopeStore.revision,
+    () => {
+      invalidateRecommendation()
+      invalidateSourceSelection()
     }
   )
   watch(
@@ -3961,5 +4117,11 @@
     },
     { deep: true }
   )
+  onBeforeUnmount(() => {
+    openRevision++
+    referenceRevision++
+    invalidateRecommendation()
+    invalidateSourceSelection()
+  })
   defineExpose({ handleOpen })
 </script>

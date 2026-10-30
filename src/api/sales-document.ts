@@ -4,6 +4,8 @@ import { groupBy, omit, uniq } from 'lodash-es'
 import { normalizeNonNullableText, normalizeNullableText } from '@/utils/form/normalize'
 import { buildOrIlikeFilter } from '@/utils/supabase/search'
 import { fetchAllRangePages } from '@/utils/supabase/pagination'
+import { withRequestOptions } from '@/api/providers/supabase/query'
+import type { ApiFeedbackOptions, ApiRequestOptions } from '@/types/api/request'
 import type {
   EmployeeIntegrationItem,
   EmployeeSelectorContractParams
@@ -753,7 +755,11 @@ export async function fetchScmCustomerOptions(tenantId?: string, keyword?: strin
   return result
 }
 
-export async function fetchScmMaterialOptions(tenantId?: string, materialIds?: string[]) {
+export async function fetchScmMaterialOptions(
+  tenantId?: string,
+  materialIds?: string[],
+  options?: ApiRequestOptions & Pick<ApiFeedbackOptions, 'showErrorMessage'>
+) {
   const response = await fetchAllRangePages(({ from, to }) => {
     let request = supabase
       .from('mdm_material')
@@ -801,9 +807,9 @@ export async function fetchScmMaterialOptions(tenantId?: string, materialIds?: s
         auxiliaryUnit: { unitName: string } | null
         auxiliaryUnit2: { unitName: string } | null
       }>
-    >(() => request, {
+    >(() => withRequestOptions(request, options), {
       breakReturn: true,
-      showErrorMessage: true,
+      showErrorMessage: options?.showErrorMessage ?? true,
       errorMessage: '物料列表加载失败，请稍后重试'
     })
   })
