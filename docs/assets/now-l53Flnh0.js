@@ -1,0 +1,1 @@
+import{at as e}from"./_baseUniq-BkjZSkOb.js";var t=function(){return e.Date.now()};export{t};

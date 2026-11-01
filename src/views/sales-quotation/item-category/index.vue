@@ -36,10 +36,14 @@
       <CategoryDialog ref="dialogRef" @success="handleSaved" />
       <CategoryDetailDrawer ref="detailDrawerRef" />
     </div>
+    <MasterDataDeleteGuard ref="deleteGuardRef" />
   </ArtPermissionGuard>
 </template>
 
 <script setup lang="tsx">
+  import MasterDataDeleteGuard from '@/components/business/master-data-delete-guard/index.vue'
+  import { useRecordDeleteGuard } from '@/hooks/core/useRecordDeleteGuard'
+
   import { ElMessage } from 'element-plus'
   import { storeToRefs } from 'pinia'
   import ArtButtonMore, {
@@ -55,7 +59,6 @@
   import BusinessTableRowActions from '@/components/business/business-table-row-actions/index.vue'
   import BusinessTableWorkspaceActions from '@/components/business/business-table-workspace-actions/index.vue'
   import BusinessWorkspaceHeader from '@/components/business/business-workspace-header/index.vue'
-  import { useArtFeedback } from '@/hooks/core/useArtFeedback'
   import { loadAllDocumentPages } from '@/utils/business/document-detail-list'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
@@ -76,10 +79,10 @@
   } from '@scm/api'
   import CategoryDialog from './modules/category-dialog.vue'
   import CategoryDetailDrawer from './modules/category-detail-drawer.vue'
+  const { deleteGuardRef, deleteRecords } = useRecordDeleteGuard('scm_quote_category', '报价项分类')
 
   defineOptions({ name: 'ScmQuoteCategory' })
 
-  const { confirmAction } = useArtFeedback()
   const { isPlatformSuper } = storeToRefs(useUserStore())
   const tenantScopeStore = useTenantScopeStore()
   const { effectiveTenantId, tenantOptions: availableTenants } = storeToRefs(tenantScopeStore)
@@ -288,22 +291,17 @@
   }
 
   async function handleDelete(row: ScmQuoteCategory): Promise<void> {
-    try {
-      await confirmAction(
-        `确定删除“${row.categoryName}”吗？已被报价单引用的分类无法删除。`,
-        '删除报价项分类',
-        {
-          type: 'warning',
-          confirmButtonText: '确认删除',
-          cancelButtonText: '取消',
-          confirmButtonType: 'danger'
-        }
-      )
-      await deleteQuoteCategory(row.id)
-      await tableRef.value?.refreshRemove()
-    } catch {
-      // 用户取消或 API 已提示业务错误。
-    }
+    await deleteRecords({
+      resources: [{ id: String(row.id ?? ''), label: String(row.categoryName ?? '报价项分类') }],
+      permission: 'ScmQuoteCategory:Delete',
+      confirmMessage: `确定删除“${row.categoryName}”吗？已被报价单引用的分类无法删除。`,
+      remove: async () => {
+        await deleteQuoteCategory(row.id)
+      },
+      onDeleted: async () => {
+        await tableRef.value?.refreshRemove()
+      }
+    })
   }
 
   function handleSaved(mode: 'add' | 'edit'): void {

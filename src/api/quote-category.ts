@@ -163,6 +163,13 @@ export async function updateQuoteCategory(id: string, input: QuoteCategoryWrite)
 export async function deleteQuoteCategory(id: string) {
   return responseHandle(
     () => supabase.from('scm_quote_category').delete({ count: 'exact' }).eq('id', id),
-    { showMessage: true, breakReturn: true, requireAffected: true, message: '报价项分类已删除' }
+    {
+      showReferenceFeedback: false,
+      showErrorMessage: false,
+      showMessage: true,
+      breakReturn: true,
+      requireAffected: true,
+      message: '报价项分类已删除'
+    }
   )
 }

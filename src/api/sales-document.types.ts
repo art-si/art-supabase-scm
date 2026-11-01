@@ -97,7 +97,7 @@ export interface ScmEngineeringReferenceOption {
 }
 
 export interface ScmEngineeringReferenceOptions {
-  categories: ScmEngineeringReferenceOption[]
+  categories: (ScmEngineeringReferenceOption & { parentId?: string | null })[]
   materialTypes: ScmEngineeringReferenceOption[]
   units: ScmEngineeringReferenceOption[]
   codeRules: ScmEngineeringReferenceOption[]

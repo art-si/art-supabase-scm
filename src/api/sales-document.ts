@@ -638,12 +638,18 @@ export async function fetchScmEngineeringReferenceOptions(tenantId: string) {
   const [categories, materialTypes, units, codeRules] = await Promise.all([
     fetchAllRangePages(({ from, to }) =>
       responseHandle<
-        Array<{ id: string; tenantId: string; categoryCode: string; categoryName: string }>
+        Array<{
+          id: string
+          parentId: string | null
+          tenantId: string
+          categoryCode: string
+          categoryName: string
+        }>
       >(
         () =>
           supabase
             .from('mdm_material_category')
-            .select('id,tenant_id,category_code,category_name')
+            .select('id,parent_id,tenant_id,category_code,category_name')
             .eq('tenant_id', tenantId)
             .eq('status', 'enabled')
             .order('sort')
@@ -707,6 +713,7 @@ export async function fetchScmEngineeringReferenceOptions(tenantId: string) {
   const data: ScmEngineeringReferenceOptions = {
     categories: (categories.data ?? []).map((item) => ({
       id: item.id,
+      parentId: item.parentId,
       tenantId: item.tenantId,
       code: item.categoryCode,
       name: item.categoryName

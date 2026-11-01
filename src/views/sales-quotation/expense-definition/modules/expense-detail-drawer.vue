@@ -13,11 +13,12 @@
           </ElTag>
         </template>
       </ArtEntitySummary>
-      <ArtSectionCard title="费用定义" subtitle="稳定编码和使用状态由报价单引用。">
-        <ArtDescriptions :data="record" :items="definitionItems" :columns="2" />
-      </ArtSectionCard>
-      <ArtSectionCard title="显示与维护" subtitle="列表标签和最近一次更新信息。">
-        <ArtDescriptions :data="record" :items="displayItems" :columns="2" />
+      <ArtSectionCard title="费用定义" subtitle="核对费用编码、使用状态与维护信息。">
+        <ArtDescriptions
+          :data="record"
+          :items="[...definitionItems, ...displayItems]"
+          :columns="2"
+        />
       </ArtSectionCard>
     </div>
   </ArtDrawer>

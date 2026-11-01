@@ -15,16 +15,13 @@
       />
       <ArtForm
         ref="formRef"
-        :model-value="form"
-        @update:model-value="replaceReactiveModel(form, $event)"
+        v-model="form"
         :items="items"
         :rules="rules"
         :validate-on-rule-change="false"
         :span="12"
         :gutter="20"
         label-width="110px"
-        :show-reset="false"
-        :show-submit="false"
       />
 
       <ArtSectionCard
@@ -76,7 +73,6 @@
 </template>
 
 <script setup lang="tsx">
-  import { replaceReactiveModel } from '@/utils/form/model'
   import { ElInputNumber, ElMessage, ElOption, ElSelect, type FormRules } from 'element-plus'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import ArtAsyncState from '@/components/core/feedback/art-async-state/index.vue'
@@ -134,18 +130,19 @@
     feeItems: [],
     remark: ''
   })
-  const form = reactive<QuoteCategoryWrite>(initialForm())
+  const form = ref<QuoteCategoryWrite>(initialForm())
 
   const previewTotal = computed(
     () =>
-      Number(form.quantity || 0) * Number(form.unitPrice || 0) +
-      form.feeItems.reduce((sum, item) => sum + Number(item.amount || 0), 0)
+      Number(form.value.quantity || 0) * Number(form.value.unitPrice || 0) +
+      form.value.feeItems.reduce((sum, item) => sum + Number(item.amount || 0), 0)
   )
 
   const feeColumns = computed<ColumnOption<QuoteCategoryFee>[]>(() => [
     {
       prop: 'expenseId',
       label: '费用',
+      headerTooltip: '每一行附加费用都需要选择费用类型。',
       minWidth: 240,
       required: true,
       requiredMessage: ({ rowIndex }) => `第 ${rowIndex + 1} 项附加费用未选择费用类型`,
@@ -163,7 +160,9 @@
               key={expense.id}
               label={`${expense.expenseName}（${expense.expenseCode}）`}
               value={expense.id}
-              disabled={form.feeItems.some((item) => item !== row && item.expenseId === expense.id)}
+              disabled={form.value.feeItems.some(
+                (item) => item !== row && item.expenseId === expense.id
+              )}
             />
           ))}
         </ElSelect>
@@ -172,6 +171,7 @@
     {
       prop: 'amount',
       label: '金额（元）',
+      headerTooltip: '金额为必填项，允许为 0，不能填写负数。',
       width: 165,
       align: 'right',
       required: true,
@@ -200,7 +200,7 @@
           icon="ri:delete-bin-line"
           label="移除附加费用"
           tone="danger"
-          onClick={() => removeFee(form.feeItems.indexOf(row))}
+          onClick={() => removeFee(form.value.feeItems.indexOf(row))}
         />
       )
     }
@@ -211,7 +211,7 @@
       if (index === 0) return '合计'
       if (column.property === 'amount')
         return formatCurrencyValue(
-          form.feeItems.reduce((sum, item) => sum + Number(item.amount || 0), 0)
+          form.value.feeItems.reduce((sum, item) => sum + Number(item.amount || 0), 0)
         )
       return ''
     })
@@ -266,8 +266,8 @@
         })),
         filterable: true,
         loading: referencesLoading.value,
-        disabled: !form.tenantId,
-        placeholder: form.tenantId ? '请选择项目' : '请先选择租户'
+        disabled: !form.value.tenantId,
+        placeholder: form.value.tenantId ? '请选择项目' : '请先选择租户'
       }
     },
     { label: '报价项分类', key: 'categoryName', type: 'input', props: { maxlength: 120 } },
@@ -328,15 +328,15 @@
   }
 
   function addFee(): void {
-    if (form.feeItems.length >= 30) return
+    if (form.value.feeItems.length >= 30) return
     const next = availableExpenses.value.find(
-      (expense) => !form.feeItems.some((item) => item.expenseId === expense.id)
+      (expense) => !form.value.feeItems.some((item) => item.expenseId === expense.id)
     )
-    if (next) form.feeItems.push({ expenseId: next.id, amount: 0 })
+    if (next) form.value.feeItems.push({ expenseId: next.id, amount: 0 })
   }
 
   function removeFee(index: number): void {
-    form.feeItems.splice(index, 1)
+    form.value.feeItems.splice(index, 1)
   }
 
   async function handleSubmit(): Promise<boolean> {
@@ -352,15 +352,15 @@
         return false
       }
       if (
-        form.feeItems.some(
+        form.value.feeItems.some(
           (item) => !item.expenseId || !Number.isFinite(item.amount) || item.amount < 0
         )
       ) {
         ElMessage.warning('请完整选择报价费用并填写非负金额')
         return false
       }
-      if (recordId.value) await updateQuoteCategory(recordId.value, form)
-      else await createQuoteCategory(form)
+      if (recordId.value) await updateQuoteCategory(recordId.value, form.value)
+      else await createQuoteCategory(form.value)
       emit('success', recordId.value ? 'edit' : 'add')
       return true
     } catch {
@@ -373,7 +373,7 @@
     preparing = true
     recordId.value = options.copy ? undefined : options.record?.id
     tenantOptions.value = options.tenantOptions
-    Object.assign(form, initialForm(), options.record ?? {}, {
+    Object.assign(form.value, initialForm(), options.record ?? {}, {
       tenantId:
         options.record?.tenantId ?? options.effectiveTenantId ?? defaultWriteTenantId.value ?? '',
       feeItems: options.record?.feeItems.map((fee) => ({ ...fee })) ?? [],
@@ -394,7 +394,7 @@
       onOpen: async (_openData, api) => {
         formRef.value?.clearValidate()
         try {
-          await loadReferences(form.tenantId)
+          await loadReferences(form.value.tenantId)
         } finally {
           api.setLoading(false)
         }
@@ -404,11 +404,11 @@
   }
 
   watch(
-    () => form.tenantId,
+    () => form.value.tenantId,
     (tenantId, previous) => {
       if (preparing || tenantId === previous) return
-      form.projectId = ''
-      form.feeItems = []
+      form.value.projectId = ''
+      form.value.feeItems = []
       void loadReferences(tenantId)
     }
   )

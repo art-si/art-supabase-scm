@@ -9,14 +9,11 @@
       >
         <ArtForm
           ref="formRef"
-          :model-value="form"
-          @update:model-value="replaceReactiveModel(form, $event)"
+          v-model="form"
           :items="formItems"
           :rules="rules"
           :span="24"
           label-width="96px"
-          :show-reset="false"
-          :show-submit="false"
         />
       </ArtSectionCard>
       <ArtSectionCard
@@ -38,14 +35,13 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, reactive, ref, watch } from 'vue'
+  import { computed, ref, watch } from 'vue'
   import {
     quotationActionLines,
     selectedQuotationDocuments,
     normalizeQuotationSelection,
     type QuotationActionLine
   } from '../quotation-selection'
-  import { replaceReactiveModel } from '@/utils/form/model'
   import { ElMessage, type FormRules } from 'element-plus'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
@@ -83,7 +79,7 @@
       openDetail('')
     }
   )
-  const form = reactive({ parentMaterialId: '' })
+  const form = ref({ parentMaterialId: '' })
   const bomLines = computed(() => quotationActionLines(quotations.value))
   const selectedLines = ref<QuotationActionLine[]>([])
   const componentIds = computed(() => new Set(bomLines.value.map((line) => line.materialId)))
@@ -130,7 +126,7 @@
       await batchScmQuotationAction(
         'bom',
         selectedQuotationDocuments(quotations.value, selectedLines.value),
-        { parentMaterialId: form.parentMaterialId }
+        { parentMaterialId: form.value.parentMaterialId }
       )
       if (revision !== openRevision) return false
       emit('success')
@@ -162,7 +158,7 @@
     quotation.value = record
     openRevision += 1
     openDetail(record.tenantId)
-    form.parentMaterialId = ''
+    form.value.parentMaterialId = ''
     await dialogRef.value?.handleOpen(record, {
       title: `转报价 BOM · ${records.length} 张报价`,
       confirmText: '执行生成',

@@ -3,22 +3,18 @@
     <template #subtitle>维护报价可选费用的稳定编码、状态和显示方式。</template>
     <ArtForm
       ref="formRef"
-      :model-value="form"
-      @update:model-value="replaceReactiveModel(form, $event)"
+      v-model="form"
       :items="items"
       :rules="rules"
       :validate-on-rule-change="false"
       :span="12"
       :gutter="20"
       label-width="106px"
-      :show-reset="false"
-      :show-submit="false"
     />
   </ArtDialog>
 </template>
 
 <script setup lang="ts">
-  import { replaceReactiveModel } from '@/utils/form/model'
   import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
   import type { FormRules } from 'element-plus'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
@@ -64,7 +60,7 @@
     textColor: '',
     tagStyle: 'plain'
   })
-  const form = reactive<QuoteExpenseWrite>(initialForm())
+  const form = ref<QuoteExpenseWrite>(initialForm())
 
   const rules = computed<FormRules<QuoteExpenseWrite>>(() => ({
     tenantId: [
@@ -89,7 +85,6 @@
   const items = computed<FormItem[]>(() => [
     ...(shouldExposeTenantField.value
       ? [
-          { label: '数据归属', key: 'tenantSection', type: 'divider', span: 24 } as FormItem,
           {
             label: '所属租户',
             key: 'tenantId',
@@ -104,7 +99,6 @@
           } as FormItem
         ]
       : []),
-    { label: '费用定义', key: 'definitionSection', type: 'divider', span: 24 },
     { label: '费用编码', key: 'expenseCode', type: 'input', props: { maxlength: 40 } },
     { label: '费用名称', key: 'expenseName', type: 'input', props: { maxlength: 80 } },
     {
@@ -128,7 +122,6 @@
       span: 24,
       props: { type: 'textarea', rows: 3, maxlength: 500, showWordLimit: true }
     },
-    { label: '显示设置', key: 'displaySection', type: 'divider', span: 24 },
     {
       label: '文字颜色',
       key: 'textColor',
@@ -148,8 +141,8 @@
   async function handleSubmit(): Promise<boolean> {
     try {
       if (!(await formRef.value?.validate())) return false
-      if (recordId.value) await updateQuoteExpense(recordId.value, form)
-      else await createQuoteExpense(form)
+      if (recordId.value) await updateQuoteExpense(recordId.value, form.value)
+      else await createQuoteExpense(form.value)
       emit('success', recordId.value ? 'edit' : 'add')
       return true
     } catch {
@@ -161,7 +154,7 @@
   async function handleOpen(options: OpenOptions): Promise<void> {
     recordId.value = options.record?.id
     tenantOptions.value = options.tenantOptions
-    Object.assign(form, initialForm(), options.record ?? {}, {
+    Object.assign(form.value, initialForm(), options.record ?? {}, {
       tenantId:
         options.record?.tenantId ?? options.effectiveTenantId ?? defaultWriteTenantId.value ?? '',
       remark: options.record?.remark ?? ''

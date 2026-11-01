@@ -146,6 +146,8 @@
       prop: 'transferQuantity',
       label: '本次数量',
       minWidth: 155,
+      required: true,
+      headerTooltip: '仅校验勾选行：本次数量必须大于零，且不能超过该目标单据的剩余可转数量。',
       rules: {
         validator: ({ row }) =>
           !selectedLines.value.some((line) => line.lineId === row.lineId) ||

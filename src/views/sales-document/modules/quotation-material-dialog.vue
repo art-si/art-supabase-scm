@@ -24,15 +24,12 @@
       >
         <ArtForm
           ref="formRef"
-          :model-value="form"
-          @update:model-value="replaceReactiveModel(form, $event)"
+          v-model="form"
           :items="formItems"
           :rules="rules"
           :span="12"
           :gutter="20"
           label-width="110px"
-          :show-reset="false"
-          :show-submit="false"
         >
           <template #imageUrls>
             <ArtUploadImage
@@ -60,8 +57,9 @@
     type QuotationActionLine
   } from '../quotation-selection'
   import type { ArtTableExpose } from '@/components/core/tables/art-table/index.vue'
-  import { computed, reactive, ref, watch } from 'vue'
-  import { replaceReactiveModel } from '@/utils/form/model'
+  import { computed, ref, watch } from 'vue'
+  import TreeUtils from '@/utils/tree'
+
   import { ElMessage, ElSelect, ElOption, type FormRules } from 'element-plus'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
@@ -116,6 +114,10 @@
         codeRules: []
       }
   )
+  const categoryTree = new TreeUtils({ parentKey: 'parentId' })
+  const categoryOptions = computed(() =>
+    categoryTree.mapTree(categoryTree.listToTree(references.value.categories), toNameCodeOption)
+  )
   let openRevision = 0
   const route = useRoute()
   watch(
@@ -125,7 +127,7 @@
       openDetail('')
     }
   )
-  const form = reactive<ScmQuotationMaterialConfig>({
+  const form = ref<ScmQuotationMaterialConfig>({
     materialTypeId: '',
     materialSource: 'self_made',
     categoryId: '',
@@ -154,6 +156,7 @@
     ...unitColumns.map(({ key, label }): ColumnOption<MaterialRow> => ({
       prop: key,
       label,
+      headerTooltip: '本批选中的明细必须配置单位；未选中行不会生成物料。',
       minWidth: 135,
       rules: {
         validator: ({ row }) =>
@@ -206,9 +209,10 @@
     {
       label: '物料分类',
       key: 'categoryId',
-      type: 'select',
+      type: 'treeSelect',
+      options: categoryOptions.value,
       props: {
-        options: references.value.categories.map(toNameCodeOption),
+        checkStrictly: true,
         filterable: true,
         placeholder: '请选择物料分类'
       }
@@ -262,8 +266,8 @@
         'materials',
         selectedQuotationDocuments(quotations.value, selectedLines.value),
         {
-          ...form,
-          imageUrls: [...form.imageUrls],
+          ...form.value,
+          imageUrls: [...form.value.imageUrls],
           lineConfigs: selectedLines.value.map((row) => ({
             quotationId: row.quotationId,
             lineId: row.lineId,
@@ -313,7 +317,7 @@
     quotation.value = record
     openRevision += 1
     openDetail(record.tenantId)
-    Object.assign(form, {
+    Object.assign(form.value, {
       materialTypeId: '',
       materialSource: 'self_made',
       categoryId: '',
@@ -337,30 +341,31 @@
 
   watch(detail, (options) => {
     if (!options) return
-    form.materialTypeId ||= options.materialTypes.find((item) => item.name === '半成品')?.id ?? ''
-    form.categoryId ||= options.categories.find((item) => item.name === '配件')?.id ?? ''
-    form.baseUnitId ||= options.units.find((item) => item.name === '件')?.id ?? ''
+    form.value.materialTypeId ||=
+      options.materialTypes.find((item) => item.name === '半成品')?.id ?? ''
+    form.value.categoryId ||= options.categories.find((item) => item.name === '配件')?.id ?? ''
+    form.value.baseUnitId ||= options.units.find((item) => item.name === '件')?.id ?? ''
     for (const row of pendingLines.value) {
       if (!row.baseUnitId)
         row.baseUnitId =
           options.units.find(
             (unit) =>
               unit.id === row.baseUnit || unit.code === row.baseUnit || unit.name === row.baseUnit
-          )?.id || form.baseUnitId
+          )?.id || form.value.baseUnitId
       changeBaseUnit(row, '')
     }
-    form.codeRuleId ||=
+    form.value.codeRuleId ||=
       options.codeRules.find((item) => item.name.includes('半成品'))?.id ??
       options.codeRules[0]?.id ??
       ''
-    if (form.materialSource === 'self_made')
-      form.materialSource = String(
+    if (form.value.materialSource === 'self_made')
+      form.value.materialSource = String(
         (userStore.getDictMap?.mdmMaterialSource ?? []).find((item) => item.label === '自制')
           ?.value ?? 'self_made'
       )
   })
   watch(
-    () => form.baseUnitId,
+    () => form.value.baseUnitId,
     (value) => {
       for (const row of pendingLines.value)
         if (!row.baseUnitId) {

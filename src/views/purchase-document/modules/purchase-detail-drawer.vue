@@ -27,187 +27,195 @@
             ></template
           >
         </ArtEntitySummary>
-        <ArtSectionCard title="单据信息" subtitle="单据归属、日期与当前状态。">
-          <ArtDescriptions :data="record" :items="headerItems" :columns="2" />
-        </ArtSectionCard>
-        <ArtSectionCard v-if="config.fields.length" title="业务信息">
-          <ArtDescriptions :data="record" :items="detailItems" :columns="2" />
-        </ArtSectionCard>
-        <ArtSectionCard
-          title="物料明细"
-          :empty="!record.lines.length"
-          empty-title="暂无明细"
-          empty-description="单据录入物料后可在此核对数量与来源。"
-        >
-          <div class="divide-y divide-[var(--el-border-color-lighter)]">
-            <div
-              v-for="(line, index) in record.lines"
-              :key="line.lineId"
-              class="py-4 first:pt-0 last:pb-0"
+        <ElTabs v-model="activeTab">
+          <ElTabPane name="base" label="单据信息">
+            <div class="space-y-4">
+              <ArtSectionCard title="单据信息" subtitle="单据归属、日期与当前状态。">
+                <ArtDescriptions :data="record" :items="headerItems" :columns="2" />
+              </ArtSectionCard>
+              <ArtSectionCard v-if="config.fields.length" title="业务信息">
+                <ArtDescriptions :data="record" :items="detailItems" :columns="2" />
+              </ArtSectionCard>
+              <ArtSectionCard title="金额汇总">
+                <ArtDescriptions :data="record" :items="amountItems" :columns="3" />
+              </ArtSectionCard>
+            </div>
+          </ElTabPane>
+          <ElTabPane name="lines" label="物料明细">
+            <ArtSectionCard
+              title="物料明细"
+              :empty="!record.lines.length"
+              empty-title="暂无明细"
+              empty-description="单据录入物料后可在此核对数量与来源。"
             >
-              <div class="flex min-w-0 flex-wrap items-start justify-between gap-x-6 gap-y-2">
-                <div class="flex min-w-0 flex-1 items-start gap-3">
-                  <span
-                    class="flex size-7 shrink-0 items-center justify-center rounded-md bg-[var(--el-color-primary-light-9)] text-xs font-semibold text-[var(--el-color-primary)]"
-                    >{{ line.lineNo ?? index + 1 }}</span
-                  >
-                  <div class="min-w-0">
-                    <div class="break-words text-sm font-semibold text-[var(--art-gray-900)]">{{
-                      line.materialDescription || '未命名物料'
-                    }}</div>
-                    <div class="mt-1 break-words text-xs text-[var(--art-gray-600)]"
-                      >{{ line.materialCode || '无物料编码'
-                      }}<span v-if="line.specification"> · {{ line.specification }}</span></div
-                    >
-                    <div
-                      v-if="line.sourceDocumentNo"
-                      class="mt-1 break-words text-xs text-[var(--art-gray-600)]"
-                      >来源 {{ line.sourceDocumentNo }}</div
-                    >
-                    <div v-if="line.sourceLineNo" class="mt-1 text-xs text-[var(--art-gray-600)]">
-                      源单据行号 {{ line.sourceLineNo }}
-                    </div>
-                    <div
-                      v-if="record.kind === 'purchase_contract' && line.baseUnit"
-                      class="mt-1 text-xs text-[var(--art-gray-600)]"
-                    >
-                      基本单位 {{ unitDisplayName(record.tenantId, line.baseUnit) }}
-                    </div>
-                    <div
-                      v-if="
-                        record.kind === 'purchase_request' &&
-                        (line.reason || line.suggestedSupplierId)
-                      "
-                      class="mt-1 text-xs text-[var(--art-gray-600)]"
-                    >
-                      <span v-if="line.reason">需求原因 {{ line.reason }}</span>
-                      <span v-if="line.suggestedSupplierId">
-                        · 建议供应商
-                        {{
-                          suggestedSuppliers.get(line.suggestedSupplierId) || '供应商信息已变更'
-                        }}</span
+              <div class="divide-y divide-[var(--el-border-color-lighter)]">
+                <div
+                  v-for="(line, index) in record.lines"
+                  :key="line.lineId"
+                  class="py-4 first:pt-0 last:pb-0"
+                >
+                  <div class="flex min-w-0 flex-wrap items-start justify-between gap-x-6 gap-y-2">
+                    <div class="flex min-w-0 flex-1 items-start gap-3">
+                      <span
+                        class="flex size-7 shrink-0 items-center justify-center rounded-md bg-[var(--el-color-primary-light-9)] text-xs font-semibold text-[var(--el-color-primary)]"
+                        >{{ line.lineNo ?? index + 1 }}</span
                       >
+                      <div class="min-w-0">
+                        <div class="break-words text-sm font-semibold text-[var(--art-gray-900)]">{{
+                          line.materialDescription || '未命名物料'
+                        }}</div>
+                        <div class="mt-1 break-words text-xs text-[var(--art-gray-600)]"
+                          >{{ line.materialCode || '无物料编码'
+                          }}<span v-if="line.specification"> · {{ line.specification }}</span></div
+                        >
+                        <div
+                          v-if="line.sourceDocumentNo"
+                          class="mt-1 break-words text-xs text-[var(--art-gray-600)]"
+                          >来源 {{ line.sourceDocumentNo }}</div
+                        >
+                        <div
+                          v-if="line.sourceLineNo"
+                          class="mt-1 text-xs text-[var(--art-gray-600)]"
+                        >
+                          源单据行号 {{ line.sourceLineNo }}
+                        </div>
+                        <div
+                          v-if="record.kind === 'purchase_contract' && line.baseUnit"
+                          class="mt-1 text-xs text-[var(--art-gray-600)]"
+                        >
+                          基本单位 {{ unitDisplayName(record.tenantId, line.baseUnit) }}
+                        </div>
+                        <div
+                          v-if="
+                            record.kind === 'purchase_request' &&
+                            (line.reason || line.suggestedSupplierId)
+                          "
+                          class="mt-1 text-xs text-[var(--art-gray-600)]"
+                        >
+                          <span v-if="line.reason">需求原因 {{ line.reason }}</span>
+                          <span v-if="line.suggestedSupplierId">
+                            · 建议供应商
+                            {{
+                              suggestedSuppliers.get(line.suggestedSupplierId) || '供应商信息已变更'
+                            }}</span
+                          >
+                        </div>
+                        <div v-if="line.gift" class="mt-1 text-xs text-[var(--el-color-success)]"
+                          >赠品 · 金额为 0</div
+                        >
+                        <div
+                          v-if="record.kind === 'purchase_request'"
+                          class="mt-1 text-xs text-[var(--art-gray-600)]"
+                        >
+                          已采购 {{ line.purchasedQuantity ?? 0 }} · 未采购
+                          {{ line.remainingQuantity ?? line.quantity }}
+                        </div>
+                        <div
+                          v-if="record.kind === 'purchase_order'"
+                          class="mt-1 text-xs text-[var(--art-gray-600)]"
+                        >
+                          已收料 {{ line.receivedQuantity ?? 0 }} · 待收料
+                          {{ line.remainingQuantity ?? line.quantity }}
+                        </div>
+                        <div
+                          v-if="line.batchNo || line.serialNumbers?.length"
+                          class="mt-1 break-all text-xs text-[var(--art-gray-600)]"
+                        >
+                          <span v-if="line.batchNo">批号 {{ line.batchNo }}</span>
+                          <span v-if="line.serialNumbers?.length">
+                            · 序列号 {{ line.serialNumbers.join('、') }}</span
+                          >
+                        </div>
+                      </div>
                     </div>
-                    <div v-if="line.gift" class="mt-1 text-xs text-[var(--el-color-success)]"
-                      >赠品 · 金额为 0</div
-                    >
                     <div
-                      v-if="record.kind === 'purchase_request'"
-                      class="mt-1 text-xs text-[var(--art-gray-600)]"
+                      class="grid w-full grid-cols-3 gap-3 text-right text-sm sm:w-auto sm:min-w-[320px]"
                     >
-                      已采购 {{ line.purchasedQuantity ?? 0 }} · 未采购
-                      {{ line.remainingQuantity ?? line.quantity }}
-                    </div>
-                    <div
-                      v-if="record.kind === 'purchase_order'"
-                      class="mt-1 text-xs text-[var(--art-gray-600)]"
-                    >
-                      已收料 {{ line.receivedQuantity ?? 0 }} · 待收料
-                      {{ line.remainingQuantity ?? line.quantity }}
-                    </div>
-                    <div
-                      v-if="line.batchNo || line.serialNumbers?.length"
-                      class="mt-1 break-all text-xs text-[var(--art-gray-600)]"
-                    >
-                      <span v-if="line.batchNo">批号 {{ line.batchNo }}</span>
-                      <span v-if="line.serialNumbers?.length">
-                        · 序列号 {{ line.serialNumbers.join('、') }}</span
+                      <div
+                        ><div class="text-xs text-[var(--art-gray-600)]">数量</div
+                        ><div class="mt-1 font-medium tabular-nums"
+                          >{{ line.quantity }}
+                          {{ unitDisplayName(record.tenantId, line.unit) }}</div
+                        ></div
+                      >
+                      <div
+                        ><div class="text-xs text-[var(--art-gray-600)]">单价</div
+                        ><div class="mt-1 font-medium tabular-nums">{{
+                          formatCurrencyValue(line.unitPrice)
+                        }}</div></div
+                      >
+                      <div
+                        ><div class="text-xs text-[var(--art-gray-600)]">价税合计</div
+                        ><div class="mt-1 font-semibold tabular-nums text-[var(--art-gray-900)]">{{
+                          formatCurrencyValue(
+                            line.gift
+                              ? 0
+                              : Number(line.quantity) *
+                                  line.unitPrice *
+                                  (1 - line.discountRate / 100) *
+                                  (1 + line.taxRate / 100)
+                          )
+                        }}</div></div
                       >
                     </div>
                   </div>
                 </div>
-                <div
-                  class="grid w-full grid-cols-3 gap-3 text-right text-sm sm:w-auto sm:min-w-[320px]"
-                >
-                  <div
-                    ><div class="text-xs text-[var(--art-gray-600)]">数量</div
-                    ><div class="mt-1 font-medium tabular-nums"
-                      >{{ line.quantity }} {{ unitDisplayName(record.tenantId, line.unit) }}</div
-                    ></div
-                  >
-                  <div
-                    ><div class="text-xs text-[var(--art-gray-600)]">单价</div
-                    ><div class="mt-1 font-medium tabular-nums">{{
-                      formatCurrencyValue(line.unitPrice)
-                    }}</div></div
-                  >
-                  <div
-                    ><div class="text-xs text-[var(--art-gray-600)]">价税合计</div
-                    ><div class="mt-1 font-semibold tabular-nums text-[var(--art-gray-900)]">{{
-                      formatCurrencyValue(
-                        line.gift
-                          ? 0
-                          : Number(line.quantity) *
-                              line.unitPrice *
-                              (1 - line.discountRate / 100) *
-                              (1 + line.taxRate / 100)
-                      )
-                    }}</div></div
-                  >
-                </div>
               </div>
+            </ArtSectionCard>
+          </ElTabPane>
+          <ElTabPane
+            v-if="record.paymentPlans.length || record.deliveryPlans.length"
+            name="plans"
+            label="履约计划"
+          >
+            <div class="space-y-4">
+              <ArtSectionCard v-if="record.paymentPlans.length" title="付款计划">
+                <div
+                  v-for="plan in record.paymentPlans"
+                  :key="plan.id"
+                  class="flex flex-wrap justify-between gap-3 border-b border-[var(--el-border-color-lighter)] py-2 text-sm last:border-0"
+                >
+                  <span>{{ plan.dueDate }} · {{ plan.isAdvance ? '预付' : '应付' }}</span>
+                  <strong>{{ plan.ratio }}% · {{ formatCurrencyValue(plan.amount) }}</strong></div
+                >
+              </ArtSectionCard>
+              <ArtSectionCard v-if="record.deliveryPlans.length" title="交货计划">
+                <div
+                  v-for="plan in record.deliveryPlans"
+                  :key="plan.id"
+                  class="border-b border-[var(--el-border-color-lighter)] py-2 text-sm last:border-0"
+                >
+                  <strong>{{ plan.plannedDate }} · 计划 {{ plan.quantity }}</strong>
+                  <div class="mt-1 text-[var(--art-gray-600)]">
+                    基本数量 {{ plan.plannedBaseQuantity ?? plan.quantity }} · 已交货
+                    {{ plan.deliveredQuantity }} · 未交货
+                    {{ plan.remainingQuantity ?? plan.quantity }}
+                  </div>
+                  <div v-if="plan.recentDeliveryDate" class="mt-1 text-[var(--art-gray-600)]">
+                    最近交货 {{ plan.recentDeliveryDate }}
+                  </div>
+                  <div class="text-[var(--art-gray-600)]"
+                    >{{ plan.location }} {{ plan.address }}</div
+                  ></div
+                >
+              </ArtSectionCard>
             </div>
-          </div>
-        </ArtSectionCard>
-        <ArtSectionCard v-if="record.paymentPlans.length" title="付款计划">
-          <div
-            v-for="plan in record.paymentPlans"
-            :key="plan.id"
-            class="flex flex-wrap justify-between gap-3 border-b border-[var(--el-border-color-lighter)] py-2 text-sm last:border-0"
-          >
-            <span>{{ plan.dueDate }} · {{ plan.isAdvance ? '预付' : '应付' }}</span>
-            <strong>{{ plan.ratio }}% · {{ formatCurrencyValue(plan.amount) }}</strong></div
-          >
-        </ArtSectionCard>
-        <ArtSectionCard v-if="record.deliveryPlans.length" title="交货计划">
-          <div
-            v-for="plan in record.deliveryPlans"
-            :key="plan.id"
-            class="border-b border-[var(--el-border-color-lighter)] py-2 text-sm last:border-0"
-          >
-            <strong>{{ plan.plannedDate }} · 计划 {{ plan.quantity }}</strong>
-            <div class="mt-1 text-[var(--art-gray-600)]">
-              基本数量 {{ plan.plannedBaseQuantity ?? plan.quantity }} · 已交货
-              {{ plan.deliveredQuantity }} · 未交货 {{ plan.remainingQuantity ?? plan.quantity }}
-            </div>
-            <div v-if="plan.recentDeliveryDate" class="mt-1 text-[var(--art-gray-600)]">
-              最近交货 {{ plan.recentDeliveryDate }}
-            </div>
-            <div class="text-[var(--art-gray-600)]"
-              >{{ plan.location }} {{ plan.address }}</div
-            ></div
-          >
-        </ArtSectionCard>
-        <ArtSectionCard v-if="record.clauses.length" title="合同条款">
-          <div
-            v-for="clause in record.clauses"
-            :key="clause.id"
-            class="border-b border-[var(--el-border-color-lighter)] py-2 text-sm last:border-0"
-          >
-            <strong>{{ clause.title }}</strong
-            ><p class="mt-1 whitespace-pre-wrap text-[var(--art-gray-600)]">{{
-              clause.content
-            }}</p></div
-          >
-        </ArtSectionCard>
-        <ArtSectionCard title="金额汇总"
-          ><div class="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-            <div
-              ><span class="text-[var(--art-gray-600)]">货品金额</span
-              ><strong class="block">{{ formatCurrencyValue(record.subtotal) }}</strong></div
-            >
-            <div
-              ><span class="text-[var(--art-gray-600)]">税金</span
-              ><strong class="block">{{ formatCurrencyValue(record.taxAmount) }}</strong></div
-            >
-            <div
-              ><span class="text-[var(--art-gray-600)]">价税合计</span
-              ><strong class="block text-[var(--el-color-primary)]">{{
-                formatCurrencyValue(record.totalAmount)
-              }}</strong></div
-            >
-          </div></ArtSectionCard
-        >
+          </ElTabPane>
+          <ElTabPane v-if="record.clauses.length" name="clauses" label="合同条款">
+            <ArtSectionCard title="合同条款">
+              <div
+                v-for="clause in record.clauses"
+                :key="clause.id"
+                class="border-b border-[var(--el-border-color-lighter)] py-2 text-sm last:border-0"
+              >
+                <strong>{{ clause.title }}</strong
+                ><p class="mt-1 whitespace-pre-wrap text-[var(--art-gray-600)]">{{
+                  clause.content
+                }}</p></div
+              >
+            </ArtSectionCard>
+          </ElTabPane>
+        </ElTabs>
       </div>
     </ArtAsyncState>
   </ArtDrawer>
@@ -237,6 +245,12 @@
   defineOptions({ name: 'ScmPurchaseDetailDrawer' })
   const { loadUnitDisplayNames, unitDisplayName } = useUnitDisplayNames()
   const drawerRef = ref<ArtDrawerExpose<ScmPurchaseDocument>>()
+  const activeTab = ref('base')
+  const amountItems: ArtDescriptionItem<ScmPurchaseDocument>[] = [
+    { key: 'subtotal', label: '货品金额', field: 'subtotal', format: 'money' },
+    { key: 'taxAmount', label: '税金', field: 'taxAmount', format: 'money' },
+    { key: 'totalAmount', label: '价税合计', field: 'totalAmount', format: 'money' }
+  ]
   const recordSeed = ref<ScmPurchaseDocument>({
     id: '',
     tenantId: '',
@@ -338,6 +352,7 @@
     }))
   )
   async function handleOpen(value: ScmPurchaseDocument): Promise<void> {
+    activeTab.value = 'base'
     const revision = ++openRevision
     recordSeed.value = value
     openDetail(value.id, { document: value, suppliers: new Map<string, string>() })

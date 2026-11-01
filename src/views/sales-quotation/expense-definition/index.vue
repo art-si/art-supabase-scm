@@ -36,10 +36,14 @@
       <ExpenseDialog ref="dialogRef" @success="handleSaved" />
       <ExpenseDetailDrawer ref="detailDrawerRef" />
     </div>
+    <MasterDataDeleteGuard ref="deleteGuardRef" />
   </ArtPermissionGuard>
 </template>
 
 <script setup lang="tsx">
+  import MasterDataDeleteGuard from '@/components/business/master-data-delete-guard/index.vue'
+  import { useRecordDeleteGuard } from '@/hooks/core/useRecordDeleteGuard'
+
   import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
   import { ElMessage, ElTag } from 'element-plus'
   import { storeToRefs } from 'pinia'
@@ -56,7 +60,6 @@
   } from '@/components/core/tables/art-table-query/index.vue'
   import BusinessTableWorkspaceActions from '@/components/business/business-table-workspace-actions/index.vue'
   import BusinessWorkspaceHeader from '@/components/business/business-workspace-header/index.vue'
-  import { useArtFeedback } from '@/hooks/core/useArtFeedback'
   import { loadAllDocumentPages } from '@/utils/business/document-detail-list'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
@@ -73,6 +76,7 @@
   } from '@scm/api'
   import ExpenseDialog from './modules/expense-dialog.vue'
   import ExpenseDetailDrawer from './modules/expense-detail-drawer.vue'
+  const { deleteGuardRef, deleteRecords } = useRecordDeleteGuard('scm_quote_expense', '报价费用')
 
   const commonEnabledDisabledStatusOptions = useDictionaryOptions(
     'commonEnabledDisabledStatus',
@@ -81,7 +85,6 @@
 
   defineOptions({ name: 'ScmQuoteExpense' })
 
-  const { confirmAction } = useArtFeedback()
   const { isPlatformSuper } = storeToRefs(useUserStore())
   const tenantScopeStore = useTenantScopeStore()
   const { effectiveTenantId, tenantOptions: availableTenants } = storeToRefs(tenantScopeStore)
@@ -278,22 +281,17 @@
   }
 
   async function handleDelete(row: ScmQuoteExpense): Promise<void> {
-    try {
-      await confirmAction(
-        `确定删除“${row.expenseName}”吗？已被报价单引用的费用无法删除。`,
-        '删除报价费用',
-        {
-          type: 'warning',
-          confirmButtonText: '确认删除',
-          cancelButtonText: '取消',
-          confirmButtonType: 'danger'
-        }
-      )
-      await deleteQuoteExpense(row.id)
-      await tableRef.value?.refreshRemove()
-    } catch {
-      // 取消操作和 API 已提示的约束错误无需重复弹出消息。
-    }
+    await deleteRecords({
+      resources: [{ id: String(row.id ?? ''), label: String(row.expenseName ?? '报价费用') }],
+      permission: 'ScmQuoteExpense:Delete',
+      confirmMessage: `确定删除“${row.expenseName}”吗？已被报价单引用的费用无法删除。`,
+      remove: async () => {
+        await deleteQuoteExpense(row.id)
+      },
+      onDeleted: async () => {
+        await tableRef.value?.refreshRemove()
+      }
+    })
   }
 
   function handleSaved(mode: 'add' | 'edit'): void {

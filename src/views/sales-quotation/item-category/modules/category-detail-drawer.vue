@@ -14,37 +14,45 @@
         </template>
       </ArtEntitySummary>
 
-      <ArtSectionCard title="项目与报价" subtitle="价格与数量由报价项维护，总价由系统核算。">
-        <ArtDescriptions :data="record" :items="descriptionItems" :columns="2" />
-      </ArtSectionCard>
-
-      <ArtSectionCard
-        title="附加费用"
-        subtitle="引用报价费用定义中的项目。"
-        :loading="feeLoading"
-        :error="feeError"
-        :empty="!record.feeItems.length"
-        empty-title="暂无附加费用"
-        empty-description="此报价项仅按数量与单价计价。"
-        error-title="费用名称加载失败"
-        @retry="retryLoad"
-      >
-        <div class="flex flex-col divide-y divide-[var(--el-border-color-lighter)]">
-          <div
-            v-for="fee in record.feeItems"
-            :key="fee.expenseId"
-            class="flex min-w-0 items-center justify-between gap-4 py-2 text-sm"
+      <ElTabs v-if="record.feeItems.length" v-model="activeTab">
+        <ElTabPane name="quotation" label="项目与报价">
+          <ArtSectionCard title="项目与报价" subtitle="价格与数量由报价项维护，总价由系统核算。">
+            <ArtDescriptions :data="record" :items="descriptionItems" :columns="2" />
+          </ArtSectionCard>
+        </ElTabPane>
+        <ElTabPane name="fees" label="附加费用">
+          <ArtSectionCard
+            title="附加费用"
+            subtitle="引用报价费用定义中的项目。"
+            :loading="feeLoading"
+            :error="feeError"
+            :empty="!record.feeItems.length"
+            empty-title="暂无附加费用"
+            empty-description="此报价项仅按数量与单价计价。"
+            error-title="费用名称加载失败"
+            @retry="retryLoad"
           >
-            <span class="min-w-0 truncate" :title="expenseName(fee.expenseId)">{{
-              expenseName(fee.expenseId)
-            }}</span>
-            <strong class="shrink-0 font-medium">{{ formatCurrencyValue(fee.amount) }}</strong>
-          </div>
-          <div class="flex items-center justify-between gap-4 pt-3 text-sm font-semibold">
-            <span>费用合计</span>
-            <span>{{ formatCurrencyValue(record.feeTotal) }}</span>
-          </div>
-        </div>
+            <div class="flex flex-col divide-y divide-[var(--el-border-color-lighter)]">
+              <div
+                v-for="fee in record.feeItems"
+                :key="fee.expenseId"
+                class="flex min-w-0 items-center justify-between gap-4 py-2 text-sm"
+              >
+                <span class="min-w-0 truncate" :title="expenseName(fee.expenseId)">{{
+                  expenseName(fee.expenseId)
+                }}</span>
+                <strong class="shrink-0 font-medium">{{ formatCurrencyValue(fee.amount) }}</strong>
+              </div>
+              <div class="flex items-center justify-between gap-4 pt-3 text-sm font-semibold">
+                <span>费用合计</span>
+                <span>{{ formatCurrencyValue(record.feeTotal) }}</span>
+              </div>
+            </div>
+          </ArtSectionCard>
+        </ElTabPane>
+      </ElTabs>
+      <ArtSectionCard v-else title="项目与报价" subtitle="当前报价仅按数量与单价计价，无附加费用。">
+        <ArtDescriptions :data="record" :items="descriptionItems" :columns="2" />
       </ArtSectionCard>
     </div>
   </ArtDrawer>
@@ -65,6 +73,7 @@
   defineOptions({ name: 'ScmQuoteCategoryDetailDrawer' })
 
   const drawerRef = ref<ArtDrawerExpose<ScmQuoteCategory>>()
+  const activeTab = ref('quotation')
   const record = ref<ScmQuoteCategory>({
     id: '',
     tenantId: '',
@@ -144,6 +153,7 @@
   }
 
   async function handleOpen(value: ScmQuoteCategory): Promise<void> {
+    activeTab.value = 'quotation'
     record.value = value
     openDetail(value.tenantId, [])
     await drawerRef.value?.handleOpen(value, {

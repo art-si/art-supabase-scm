@@ -17,16 +17,13 @@
       <ArtSectionCard title="单据基本信息" subtitle="单据编号、项目和客户确定此单据的业务归属。">
         <ArtForm
           ref="headerFormRef"
-          :model-value="header"
-          @update:model-value="replaceReactiveModel(header, $event)"
+          v-model="header"
           :items="headerItems"
           :rules="headerRules"
           :validate-on-rule-change="false"
           :span="12"
           :gutter="20"
           label-width="112px"
-          :show-reset="false"
-          :show-submit="false"
         >
           <template #projectId>
             <ArtTableSingleSelect
@@ -53,16 +50,13 @@
       >
         <ArtForm
           ref="detailsFormRef"
-          :model-value="details"
-          @update:model-value="replaceReactiveModel(details, $event)"
+          v-model="details"
           :items="detailItems"
           :rules="detailRules"
           :validate-on-rule-change="false"
           :span="12"
           :gutter="20"
           label-width="112px"
-          :show-reset="false"
-          :show-submit="false"
         >
           <template #salespersonId>
             <ArtEmployeeSelect
@@ -601,7 +595,6 @@
 </template>
 
 <script setup lang="tsx">
-  import { replaceReactiveModel } from '@/utils/form/model'
   import { useUnitDisplayNames } from '@/hooks/core/useUnitDisplayNames'
   import { cloneDeep, omit } from 'lodash-es'
   import dayjs from 'dayjs'
@@ -746,7 +739,7 @@
     () =>
       kind.value === 'sales_contract' &&
       ['框架销售合同', '价值合同'].includes(
-        documentTypeOptions.value.find((type) => type.id === header.documentTypeId)
+        documentTypeOptions.value.find((type) => type.id === header.value.documentTypeId)
           ?.documentTypeName ?? ''
       )
   )
@@ -792,8 +785,8 @@
     }
   }
 
-  const header = reactive<HeaderModel>(initialHeader())
-  const details = reactive<ScmDocumentDetails>({})
+  const header = ref<HeaderModel>(initialHeader())
+  const details = ref<ScmDocumentDetails>({})
   const lines = ref<ScmDocumentLine[]>([])
   const selectedShippingOrderId = ref('')
   interface ShippingLineChoice extends ScmDocumentLine {
@@ -807,8 +800,8 @@
   const shippingOrderOptions = computed(() =>
     sourceOptions.value.filter(
       (order) =>
-        (!header.projectId || order.projectId === header.projectId) &&
-        (!header.customerId || order.customerId === header.customerId)
+        (!header.value.projectId || order.projectId === header.value.projectId) &&
+        (!header.value.customerId || order.customerId === header.value.customerId)
     )
   )
   const shippingOrderColumns: ColumnOption<ShippingLineChoice>[] = [
@@ -899,7 +892,7 @@
     const feeTotal = fees.value.reduce((sum, fee) => sum + Number(fee.amount || 0), 0)
     const projectExtras =
       kind.value === 'project_quotation'
-        ? Number(details.packageFee || 0) + Number(details.transportFee || 0)
+        ? Number(details.value.packageFee || 0) + Number(details.value.transportFee || 0)
         : 0
     const taxTotal =
       kind.value === 'sales_contract' || kind.value === 'sales_order'
@@ -908,8 +901,8 @@
     return subtotal + taxTotal + feeTotal + projectExtras
   })
   const previewTotal = computed(() =>
-    kind.value === 'sales_contract' && details.contractTotalAmount !== undefined
-      ? details.contractTotalAmount
+    kind.value === 'sales_contract' && details.value.contractTotalAmount !== undefined
+      ? details.value.contractTotalAmount
       : contractCalculatedTotal.value
   )
   const previewTaxInclusiveTotal = computed(() =>
@@ -941,7 +934,7 @@
     projectId: [
       {
         validator: (_rule, value, callback) => {
-          if (value || (kind.value === 'project_quotation' && header.sourceId)) callback()
+          if (value || (kind.value === 'project_quotation' && header.value.sourceId)) callback()
           else callback(new Error('请选择项目'))
         },
         trigger: 'change'
@@ -1056,7 +1049,7 @@
         })),
         filterable: true,
         loading: referencesLoading.value,
-        disabled: !header.tenantId || Boolean(header.sourceId),
+        disabled: !header.value.tenantId || Boolean(header.value.sourceId),
         clearable: !config.value.projectRequired,
         placeholder: config.value.projectRequired ? '请选择项目' : '选择既有项目，或在下方自动创建'
       }
@@ -1072,7 +1065,7 @@
         })),
         filterable: true,
         loading: referencesLoading.value,
-        disabled: !header.tenantId || Boolean(header.sourceId),
+        disabled: !header.value.tenantId || Boolean(header.value.sourceId),
         placeholder: '优先从项目带入，可手动选择'
       }
     },
@@ -1094,7 +1087,7 @@
               filterable: true,
               clearable: !config.value.sourceRequired,
               loading: referencesLoading.value,
-              disabled: !header.tenantId,
+              disabled: !header.value.tenantId,
               noDataText:
                 config.value.sourceKind === 'sales_order'
                   ? '当前租户暂无已审核或履约中的销售订单'
@@ -1289,8 +1282,9 @@
       materialOptions.value = materials.data ?? []
       expenseOptions.value = expenses.data ?? []
       documentTypeOptions.value = types.data ?? []
-      if (!recordId.value && !header.documentTypeId) {
-        header.documentTypeId = documentTypeOptions.value.find((item) => item.isDefault)?.id ?? ''
+      if (!recordId.value && !header.value.documentTypeId) {
+        header.value.documentTypeId =
+          documentTypeOptions.value.find((item) => item.isDefault)?.id ?? ''
       }
       quotationDocuments.value = (quotations?.data ?? []).filter(
         (item) => item.status === 'effective'
@@ -1312,9 +1306,9 @@
       if (loadingSeed && kind.value === 'loading') {
         const seed = loadingSeed
         const choices = await fetchScmLoadingChoices(
-          header.tenantId,
-          header.projectId,
-          header.customerId
+          header.value.tenantId,
+          header.value.projectId,
+          header.value.customerId
         )
         if (revision !== referenceRevision) return
         lines.value = buildLoadingLines(
@@ -1524,7 +1518,7 @@
           max={100}
           precision={2}
           controls={false}
-          disabled={details.paymentPlanMode !== 'ratio'}
+          disabled={details.value.paymentPlanMode !== 'ratio'}
           class="w-full!"
           aria-label="应收比例"
         />
@@ -1541,7 +1535,7 @@
           min={0}
           precision={2}
           controls={false}
-          disabled={details.paymentPlanMode === 'ratio'}
+          disabled={details.value.paymentPlanMode === 'ratio'}
           class="w-full!"
           aria-label="应收金额"
         />
@@ -1743,7 +1737,7 @@
   }
 
   async function openShippingOrderPicker(): Promise<void> {
-    if (lines.value.length && !header.sourceId) {
+    if (lines.value.length && !header.value.sourceId) {
       ElMessage.warning('当前为直接添加物料的发货单；请清空明细后再选单')
       return
     }
@@ -1751,7 +1745,7 @@
       ElMessage.warning('当前项目和客户暂无可发货的销售订单')
       return
     }
-    selectedShippingOrderId.value = header.sourceId || ''
+    selectedShippingOrderId.value = header.value.sourceId || ''
     selectedShippingLines.value = []
     availableShippingLines.value = []
     await shippingOrderPickerRef.value?.handleOpen(undefined, {
@@ -1776,7 +1770,7 @@
           ElMessage.warning('请选择销售订单及至少一行待发明细')
           return false
         }
-        if (header.sourceId && header.sourceId !== source.id) {
+        if (header.value.sourceId && header.value.sourceId !== source.id) {
           ElMessage.warning('一张发货通知单只能关联一张销售订单')
           return false
         }
@@ -1784,11 +1778,11 @@
           ElMessage.warning('发货明细最多 200 行')
           return false
         }
-        header.sourceId = source.id
-        header.projectId = source.projectId || ''
-        header.customerId = source.customerId || ''
-        header.currency = source.currency || 'CNY'
-        header.deliveryDate ||= source.deliveryDate || ''
+        header.value.sourceId = source.id
+        header.value.projectId = source.projectId || ''
+        header.value.customerId = source.customerId || ''
+        header.value.currency = source.currency || 'CNY'
+        header.value.deliveryDate ||= source.deliveryDate || ''
         lines.value = [
           ...lines.value,
           ...selectedShippingLines.value.map((line) => ({
@@ -1809,7 +1803,7 @@
   }
 
   async function openLoadingPicker(): Promise<void> {
-    if (!header.tenantId || !header.projectId || !header.customerId) {
+    if (!header.value.tenantId || !header.value.projectId || !header.value.customerId) {
       ElMessage.warning('请先选择所属租户、项目和客户')
       return
     }
@@ -1818,9 +1812,9 @@
 
   async function loadingPickerApi(params: DataSelectFetchParams) {
     const choices = await fetchScmLoadingChoices(
-      header.tenantId,
-      header.projectId,
-      header.customerId,
+      header.value.tenantId,
+      header.value.projectId,
+      header.value.customerId,
       recordId.value || undefined
     )
     const keyword = (params.keyword ?? '').trim().toLocaleLowerCase()
@@ -1861,36 +1855,36 @@
     _id: string | string[] | undefined,
     rows: EmployeeIntegrationItem[]
   ): void {
-    details.salesperson = rows[0]?.employeeName ?? ''
-    details.salesDepartment = rows[0]?.organization?.organizationName ?? ''
+    details.value.salesperson = rows[0]?.employeeName ?? ''
+    details.value.salesDepartment = rows[0]?.organization?.organizationName ?? ''
   }
 
   function applySelectedLineSource(
     source: Pick<ScmSalesDocument, 'projectId' | 'customerId' | 'currency'>
   ): void {
-    if (!header.projectId) header.projectId = source.projectId ?? ''
-    if (!header.customerId) header.customerId = source.customerId ?? ''
-    header.currency = source.currency || 'CNY'
+    if (!header.value.projectId) header.value.projectId = source.projectId ?? ''
+    if (!header.value.customerId) header.value.customerId = source.customerId ?? ''
+    header.value.currency = source.currency || 'CNY'
   }
 
   async function applySource(id: string): Promise<void> {
     const source = sourceOptions.value.find((item) => item.id === id)
     if (!source) return
     const availableLines = await fetchScmRemainingSourceLines(source)
-    if (header.sourceId !== id) return
+    if (header.value.sourceId !== id) return
     if (!availableLines.length) {
       ElMessage.warning('来源单据已无剩余数量，请选择其他单据')
-      header.sourceId = ''
+      header.value.sourceId = ''
       return
     }
-    header.projectId = source.projectId || ''
-    header.customerId = source.customerId || ''
-    header.currency = source.currency || 'CNY'
+    header.value.projectId = source.projectId || ''
+    header.value.customerId = source.customerId || ''
+    header.value.currency = source.currency || 'CNY'
     if (kind.value === 'project_quotation') {
-      Object.assign(details, source.details)
-      header.documentDate = source.documentDate
-      header.deliveryDate = source.deliveryDate || ''
-      header.remark = source.remark || ''
+      Object.assign(details.value, source.details)
+      header.value.documentDate = source.documentDate
+      header.value.deliveryDate = source.deliveryDate || ''
+      header.value.remark = source.remark || ''
     }
     lines.value = availableLines.map((line) => ({
       ...line,
@@ -1904,7 +1898,7 @@
   }
 
   function validateDetails(): boolean {
-    if (config.value.sourceRequired && !header.sourceId) {
+    if (config.value.sourceRequired && !header.value.sourceId) {
       ElMessage.warning(`请选择${config.value.sourceLabel || '来源单据'}`)
       return false
     }
@@ -1923,7 +1917,7 @@
     }
     if (
       kind.value === 'shipping_notice' &&
-      lines.value.some((line) => Boolean(line.sourceLineId) !== Boolean(header.sourceId))
+      lines.value.some((line) => Boolean(line.sourceLineId) !== Boolean(header.value.sourceId))
     ) {
       ElMessage.warning('选单明细与直接添加的物料不能混用，请检查发货明细')
       activeTab.value = 'lines'
@@ -2037,19 +2031,19 @@
       }
       if (revision !== openRevision || referencesLoading.value || referenceError.value) return false
       if (!validateDetails()) return false
-      const cleanDetails: ScmDocumentDetails = { ...details }
+      const cleanDetails: ScmDocumentDetails = { ...details.value }
       if (kind.value === 'shipping_notice') delete cleanDetails.constructionNo
       const payload: ScmSalesDocumentWrite = {
-        tenantId: header.tenantId,
+        tenantId: header.value.tenantId,
         kind: kind.value,
-        documentNo: header.documentNo,
-        documentTypeId: header.documentTypeId || null,
-        projectId: header.projectId || null,
-        customerId: header.customerId || null,
-        sourceId: kind.value === 'loading' ? null : header.sourceId || null,
-        documentDate: header.documentDate,
-        deliveryDate: header.deliveryDate || null,
-        currency: header.currency || 'CNY',
+        documentNo: header.value.documentNo,
+        documentTypeId: header.value.documentTypeId || null,
+        projectId: header.value.projectId || null,
+        customerId: header.value.customerId || null,
+        sourceId: kind.value === 'loading' ? null : header.value.sourceId || null,
+        documentDate: header.value.documentDate,
+        deliveryDate: header.value.deliveryDate || null,
+        currency: header.value.currency || 'CNY',
         details: cleanDetails,
         lines:
           kind.value === 'sales_contract' || kind.value === 'shipping_notice'
@@ -2078,7 +2072,7 @@
         paymentPlans: paymentPlans.value,
         deliveryPlans: deliveryPlans.value,
         clauses: clauses.value,
-        remark: header.remark
+        remark: header.value.remark
       }
       if (submittingId) await updateScmSalesDocument(submittingId, cloneDeep(payload))
       else await createScmSalesDocument(cloneDeep(payload))
@@ -2098,7 +2092,7 @@
     kind.value = options.kind
     recordId.value = options.copy ? undefined : options.record?.id
     tenantOptions.value = options.tenantOptions
-    Object.assign(header, initialHeader(), options.record ?? {}, {
+    Object.assign(header.value, initialHeader(), options.record ?? {}, {
       tenantId:
         options.record?.tenantId ?? options.effectiveTenantId ?? defaultWriteTenantId.value ?? '',
       documentNo: options.copy ? '' : (options.record?.documentNo ?? ''),
@@ -2109,24 +2103,26 @@
       deliveryDate: options.record?.deliveryDate ?? '',
       remark: options.record?.remark ?? ''
     })
-    for (const key of Object.keys(details)) delete details[key as keyof ScmDocumentDetails]
-    Object.assign(details, options.record?.details ?? {})
-    selectedSalesperson.value = details.salespersonId
+    for (const key of Object.keys(details.value))
+      delete details.value[key as keyof ScmDocumentDetails]
+    Object.assign(details.value, options.record?.details ?? {})
+    selectedSalesperson.value = details.value.salespersonId
       ? [
           {
-            id: details.salespersonId,
-            tenantId: header.tenantId,
+            id: details.value.salespersonId,
+            tenantId: header.value.tenantId,
             employeeNo: '',
-            employeeName: details.salesperson || '',
+            employeeName: details.value.salesperson || '',
             employmentStatus: 'active'
           }
         ]
       : []
-    if (kind.value === 'sales_quotation') details.quotationScene = 'standard'
-    if (kind.value === 'sales_quotation' && !details.quotationQuantity)
-      details.quotationQuantity = 1
-    if (options.copy) delete details.automationResult
-    if (config.value.usePaymentPlans && !details.paymentPlanMode) details.paymentPlanMode = 'amount'
+    if (kind.value === 'sales_quotation') details.value.quotationScene = 'standard'
+    if (kind.value === 'sales_quotation' && !details.value.quotationQuantity)
+      details.value.quotationQuantity = 1
+    if (options.copy) delete details.value.automationResult
+    if (config.value.usePaymentPlans && !details.value.paymentPlanMode)
+      details.value.paymentPlanMode = 'amount'
     lines.value =
       options.record?.lines.map((line, index) => ({
         ...line,
@@ -2151,14 +2147,14 @@
           }
         : undefined
     if (options.initialSource) {
-      header.tenantId = options.initialSource.tenantId
-      header.projectId = options.initialSource.projectId ?? ''
-      header.customerId = options.initialSource.customerId ?? ''
-      header.currency = options.initialSource.currency
-      header.deliveryDate = options.initialSource.deliveryDate || ''
-      Object.assign(details, options.initialSource.details)
+      header.value.tenantId = options.initialSource.tenantId
+      header.value.projectId = options.initialSource.projectId ?? ''
+      header.value.customerId = options.initialSource.customerId ?? ''
+      header.value.currency = options.initialSource.currency
+      header.value.deliveryDate = options.initialSource.deliveryDate || ''
+      Object.assign(details.value, options.initialSource.details)
       if (kind.value !== 'loading') {
-        header.sourceId = options.initialSource.id
+        header.value.sourceId = options.initialSource.id
         lines.value = (options.sourceLines ?? options.initialSource.lines).map((line) => ({
           ...line,
           lineId: crypto.randomUUID(),
@@ -2204,7 +2200,7 @@
       onOpen: async () => {
         headerFormRef.value?.clearValidate()
         detailsFormRef.value?.clearValidate()
-        await loadReferences(header.tenantId)
+        await loadReferences(header.value.tenantId)
         if (revision !== openRevision || referenceError.value) return
       },
       dialogProps: { closeOnClickModal: false }
@@ -2212,16 +2208,16 @@
   }
 
   watch(
-    () => header.tenantId,
+    () => header.value.tenantId,
     (tenantId, previous) => {
       if (preparing || tenantId === previous) return
       openRevision += 1
-      header.projectId = ''
-      header.documentTypeId = ''
-      header.customerId = ''
-      header.sourceId = ''
-      details.salespersonId = undefined
-      details.salesperson = ''
+      header.value.projectId = ''
+      header.value.documentTypeId = ''
+      header.value.customerId = ''
+      header.value.sourceId = ''
+      details.value.salespersonId = undefined
+      details.value.salesperson = ''
       selectedSalesperson.value = []
       lines.value = []
       fees.value = []
@@ -2229,16 +2225,17 @@
     }
   )
   watch(
-    () => header.projectId,
+    () => header.value.projectId,
     (projectId) => {
-      if (preparing || header.sourceId) return
+      if (preparing || header.value.sourceId) return
       const project = projectOptions.value.find((item) => item.id === projectId)
-      if (project?.customerId) header.customerId = project.customerId
-      if (projectId) details.plannedProjectName = project?.projectName ?? details.plannedProjectName
+      if (project?.customerId) header.value.customerId = project.customerId
+      if (projectId)
+        details.value.plannedProjectName = project?.projectName ?? details.value.plannedProjectName
     }
   )
   watch(
-    () => header.sourceId,
+    () => header.value.sourceId,
     (sourceId) => {
       if (!preparing && sourceId && kind.value !== 'shipping_notice' && kind.value !== 'loading')
         void applySource(sourceId)
@@ -2247,19 +2244,19 @@
   watch(
     () => lines.value.length,
     (count) => {
-      if (!preparing && kind.value === 'shipping_notice' && !count) header.sourceId = ''
+      if (!preparing && kind.value === 'shipping_notice' && !count) header.value.sourceId = ''
     }
   )
 
   watch(
-    [() => details.paymentPlanMode, previewTotal, paymentPlans],
+    [() => details.value.paymentPlanMode, previewTotal, paymentPlans],
     () => {
       const total = previewTotal.value
       for (const plan of paymentPlans.value) {
-        if (details.paymentPlanMode === 'ratio') {
+        if (details.value.paymentPlanMode === 'ratio') {
           const amount = Math.round(total * plan.ratio) / 100
           if (plan.amount !== amount) plan.amount = amount
-        } else if (details.paymentPlanMode === 'amount') {
+        } else if (details.value.paymentPlanMode === 'amount') {
           const ratio = total > 0 ? Math.round((plan.amount / total) * 10000) / 100 : 0
           if (plan.ratio !== ratio) plan.ratio = ratio
         }

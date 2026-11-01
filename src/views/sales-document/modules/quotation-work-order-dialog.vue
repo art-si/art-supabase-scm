@@ -25,15 +25,12 @@
       >
         <ArtForm
           ref="formRef"
-          :model-value="form"
-          @update:model-value="replaceReactiveModel(form, $event)"
+          v-model="form"
           :items="formItems"
           :rules="rules"
           :span="12"
           :gutter="20"
           label-width="112px"
-          :show-reset="false"
-          :show-submit="false"
         />
       </ArtSectionCard>
     </div>
@@ -41,14 +38,13 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, reactive, ref, watch } from 'vue'
+  import { computed, ref, watch } from 'vue'
   import {
     quotationActionLines,
     selectedQuotationDocuments,
     normalizeQuotationSelection,
     type QuotationActionLine
   } from '../quotation-selection'
-  import { replaceReactiveModel } from '@/utils/form/model'
   import dayjs from 'dayjs'
   import { ElMessage, type FormRules } from 'element-plus'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
@@ -89,7 +85,7 @@
     }
   )
   const selectedLines = ref<QuotationActionLine[]>([])
-  const form = reactive<ScmQuotationWorkOrderConfig>({
+  const form = ref<ScmQuotationWorkOrderConfig>({
     workOrderTypeId: '',
     constructionNo: '',
     plannedStartDate: dayjs().format('YYYY-MM-DD'),
@@ -152,14 +148,14 @@
     try {
       if (!(await validateArtFormForSubmit(formRef.value))) return false
       if (revision !== openRevision) return false
-      if (form.plannedEndDate < form.plannedStartDate) {
+      if (form.value.plannedEndDate < form.value.plannedStartDate) {
         ElMessage.warning('计划完工日期不能早于计划开始日期')
         return false
       }
       await batchScmQuotationAction(
         'work_orders',
         selectedQuotationDocuments(quotations.value, selectedLines.value),
-        { ...form }
+        { ...form.value }
       )
       if (revision !== openRevision) return false
       emit('success')
@@ -188,7 +184,7 @@
     openRevision += 1
     openDetail(record.tenantId)
     selectedLines.value = []
-    Object.assign(form, {
+    Object.assign(form.value, {
       workOrderTypeId: '',
       constructionNo: '',
       plannedStartDate: dayjs().format('YYYY-MM-DD'),
@@ -210,8 +206,8 @@
   }
 
   watch(detail, (types) => {
-    if (types && !form.workOrderTypeId)
-      form.workOrderTypeId = types.find((item) => item.isDefault)?.id ?? ''
+    if (types && !form.value.workOrderTypeId)
+      form.value.workOrderTypeId = types.find((item) => item.isDefault)?.id ?? ''
   })
 
   defineExpose({ handleOpen })

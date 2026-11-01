@@ -20,16 +20,13 @@
       <ArtSectionCard title="单据基本信息" subtitle="确定采购业务的项目、供应商与交付时间。">
         <ArtForm
           ref="headerFormRef"
-          :model-value="header"
-          @update:model-value="replaceReactiveModel(header, $event)"
+          v-model="header"
           :items="headerItems"
           :rules="headerRules"
           :validate-on-rule-change="false"
           :span="12"
           :gutter="20"
           label-width="112px"
-          :show-reset="false"
-          :show-submit="false"
         >
           <template #projectId>
             <ArtTableSingleSelect
@@ -68,16 +65,7 @@
         title="业务信息"
         subtitle="填写当前单据需要的补充信息。"
       >
-        <ArtForm
-          :model-value="details"
-          @update:model-value="replaceReactiveModel(details, $event)"
-          :items="detailItems"
-          :span="12"
-          :gutter="20"
-          label-width="112px"
-          :show-reset="false"
-          :show-submit="false"
-        >
+        <ArtForm v-model="details" :items="detailItems" :span="12" :gutter="20" label-width="112px">
           <template #buyer>
             <ArtEmployeeSelect
               v-model="details.buyer"
@@ -722,7 +710,6 @@
   import ArtButtonMore from '@/components/core/forms/art-button-more/index.vue'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { getWmsMaterialUnitFactor } from '@/utils/wms/material-quantity'
-  import { replaceReactiveModel } from '@/utils/form/model'
   import { useUnitDisplayNames } from '@/hooks/core/useUnitDisplayNames'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
@@ -867,8 +854,8 @@
     () =>
       kind.value === 'purchase_contract' &&
       ['框架采购合同', '价值合同'].includes(
-        documentTypes.value.find((item) => item.id === header.documentTypeId)?.documentTypeName ??
-          ''
+        documentTypes.value.find((item) => item.id === header.value.documentTypeId)
+          ?.documentTypeName ?? ''
       )
   )
   const recordId = ref<string>()
@@ -959,8 +946,8 @@
     deliveryDate: '',
     remark: ''
   })
-  const header = reactive<HeaderModel>(emptyHeader())
-  const details = reactive<ScmPurchaseDetails>({})
+  const header = ref<HeaderModel>(emptyHeader())
+  const details = ref<ScmPurchaseDetails>({})
   const selectedEmployees = reactive<
     Record<'buyer' | 'applicant' | 'keeper', EmployeeIntegrationItem[]>
   >({ buyer: [], applicant: [], keeper: [] })
@@ -972,7 +959,7 @@
   const discountOptions = computed(() => userStore.getDictMap?.scmDiscountMode ?? [])
   const eligibleQuotations = computed(() =>
     quotations.value.filter(
-      (item) => item.projectId === header.projectId && item.status === 'effective'
+      (item) => item.projectId === header.value.projectId && item.status === 'effective'
     )
   )
   const eligibleSalesSources = computed(() =>
@@ -980,12 +967,12 @@
       ? [
           ...eligibleQuotations.value,
           ...salesContracts.value.filter(
-            (item) => item.projectId === header.projectId && item.status === 'effective'
+            (item) => item.projectId === header.value.projectId && item.status === 'effective'
           ),
           ...(kind.value === 'purchase_order'
             ? salesOrders.value.filter(
                 (item) =>
-                  item.projectId === header.projectId &&
+                  item.projectId === header.value.projectId &&
                   ['approved', 'effective'].includes(item.status)
               )
             : [])
@@ -995,14 +982,14 @@
   const eligiblePurchaseContracts = computed(() =>
     kind.value === 'purchase_request' || kind.value === 'purchase_order'
       ? purchaseContracts.value.filter(
-          (item) => item.projectId === header.projectId && item.status === 'effective'
+          (item) => item.projectId === header.value.projectId && item.status === 'effective'
         )
       : []
   )
   const eligiblePurchaseRequests = computed(() =>
     kind.value === 'purchase_order'
       ? sourceDocuments.value.filter(
-          (item) => item.projectId === header.projectId && item.kind === 'purchase_request'
+          (item) => item.projectId === header.value.projectId && item.kind === 'purchase_request'
         )
       : []
   )
@@ -1128,7 +1115,7 @@
       prop: 'unit',
       label: '单位',
       width: 80,
-      formatter: (row) => unitDisplayName(header.tenantId, row.unit)
+      formatter: (row) => unitDisplayName(header.value.tenantId, row.unit)
     }
   ]
   const supplierPickerLabel = (row: { supplierCode?: string; supplierName?: string }): string =>
@@ -1145,8 +1132,8 @@
     { prop: 'receivedAt', label: '首次入库时间', minWidth: 180 }
   ]
   async function batchPickerApi(line: ScmPurchaseLine, params: DataSelectFetchParams) {
-    if (!header.tenantId || !line.materialId) return { data: [], total: 0 }
-    return fetchScmReceiptBatchOptions(header.tenantId, line.materialId, {
+    if (!header.value.tenantId || !line.materialId) return { data: [], total: 0 }
+    return fetchScmReceiptBatchOptions(header.value.tenantId, line.materialId, {
       keyword: params.keyword,
       warehouseId: line.warehouseId,
       ownerType: line.ownerType,
@@ -1154,7 +1141,7 @@
     })
   }
   async function materialPickerApi(params: DataSelectFetchParams) {
-    if (!header.tenantId) return { data: [], total: 0 }
+    if (!header.value.tenantId) return { data: [], total: 0 }
     const selectedCategory = String(params.filters.categoryId || '')
     const categoryIds = selectedCategory
       ? (() => {
@@ -1168,7 +1155,7 @@
           return ids
         })()
       : undefined
-    const result = await fetchScmPurchaseMaterialCandidates(header.tenantId, {
+    const result = await fetchScmPurchaseMaterialCandidates(header.value.tenantId, {
       keyword: params.keyword,
       categoryIds,
       ...buildSupabasePageRange({ current: params.page, size: params.pageSize })
@@ -1185,7 +1172,7 @@
     }
   }
   const filteredSourceLines = computed(() => {
-    const source = sourceDocuments.value.find((item) => item.id === header.sourceId)
+    const source = sourceDocuments.value.find((item) => item.id === header.value.sourceId)
     const keyword = sourceLineKeyword.value.trim().toLocaleLowerCase()
     const [start, end] = sourceLineDateRange.value
     return availableSourceLines.value.filter((line) => {
@@ -1274,7 +1261,7 @@
           max={100}
           precision={2}
           controls={false}
-          disabled={details.paymentMode !== 'ratio'}
+          disabled={details.value.paymentMode !== 'ratio'}
           class="w-full!"
           aria-label="应付比例"
         />
@@ -1291,7 +1278,7 @@
           min={0}
           precision={2}
           controls={false}
-          disabled={details.paymentMode === 'ratio'}
+          disabled={details.value.paymentMode === 'ratio'}
           class="w-full!"
           aria-label="应付金额"
         />
@@ -1360,7 +1347,7 @@
       prop: 'unit',
       label: '采购单位',
       width: 100,
-      formatter: (row) => unitDisplayName(header.tenantId, row.unit)
+      formatter: (row) => unitDisplayName(header.value.tenantId, row.unit)
     },
     {
       prop: 'quantity',
@@ -1516,7 +1503,7 @@
                 申请人
                 <ArtEmployeeSelect
                   v-model={row.applicant}
-                  tenantId={header.tenantId}
+                  tenantId={header.value.tenantId}
                   placeholder="参选员工"
                   onChange={(_, rows) => {
                     row.applicantName = rows[0]?.employeeName || ''
@@ -1657,7 +1644,7 @@
                   labelKey="batchNo"
                   title="批号主档"
                   searchPlaceholder="搜索批号"
-                  disabled={!header.tenantId || !row.materialId}
+                  disabled={!header.value.tenantId || !row.materialId}
                   emptyText="暂无现有批号"
                   emptyDescription="可通过旁边的“生成批号”按物料规则创建新批号。"
                   dialogWidth="lg"
@@ -1789,7 +1776,7 @@
       width: 110,
       formatter: (row) => (
         <ElInput
-          modelValue={row.unit ? unitDisplayName(header.tenantId, row.unit) : ''}
+          modelValue={row.unit ? unitDisplayName(header.value.tenantId, row.unit) : ''}
           onUpdate:modelValue={(value: string) => (row.unit = value)}
           maxlength={30}
           placeholder="计量单位"
@@ -1804,7 +1791,8 @@
             prop: 'stockUnit',
             label: '库存单位',
             width: 110,
-            formatter: (row: ScmPurchaseLine) => unitDisplayName(header.tenantId, row.stockUnit)
+            formatter: (row: ScmPurchaseLine) =>
+              unitDisplayName(header.value.tenantId, row.stockUnit)
           },
           {
             prop: 'baseQuantity',
@@ -1825,7 +1813,9 @@
             width: 120,
             formatter: (row: ScmPurchaseLine) => (
               <ElInput
-                modelValue={row.baseUnit ? unitDisplayName(header.tenantId, row.baseUnit) : ''}
+                modelValue={
+                  row.baseUnit ? unitDisplayName(header.value.tenantId, row.baseUnit) : ''
+                }
                 onUpdate:modelValue={(value: string) => (row.baseUnit = value)}
                 maxlength={30}
                 placeholder="基本单位"
@@ -1842,7 +1832,8 @@
             prop: 'auxiliaryUnit',
             label: '辅助单位',
             width: 110,
-            formatter: (row: ScmPurchaseLine) => unitDisplayName(header.tenantId, row.auxiliaryUnit)
+            formatter: (row: ScmPurchaseLine) =>
+              unitDisplayName(header.value.tenantId, row.auxiliaryUnit)
           },
           { prop: 'auxiliaryQuantity', label: '辅助数量', width: 115, align: 'right' as const },
           {
@@ -1850,7 +1841,7 @@
             label: '辅助单位2',
             width: 110,
             formatter: (row: ScmPurchaseLine) =>
-              unitDisplayName(header.tenantId, row.auxiliaryUnit2)
+              unitDisplayName(header.value.tenantId, row.auxiliaryUnit2)
           },
           { prop: 'auxiliaryQuantity2', label: '辅助数量2', width: 115, align: 'right' as const }
         ]
@@ -2265,7 +2256,7 @@
           value: item.id
         })),
         filterable: true,
-        disabled: !header.tenantId || Boolean(header.sourceId),
+        disabled: !header.value.tenantId || Boolean(header.value.sourceId),
         loading: loading.value
       }
     },
@@ -2283,7 +2274,8 @@
               filterable: true,
               clearable: true,
               disabled:
-                !header.tenantId || (kind.value === 'receipt_notice' && Boolean(header.sourceId)),
+                !header.value.tenantId ||
+                (kind.value === 'receipt_notice' && Boolean(header.value.sourceId)),
               loading: loading.value
             }
           } as FormItem
@@ -2301,10 +2293,10 @@
               options: sourceDocuments.value
                 .filter(
                   (item) =>
-                    (!header.projectId || item.projectId === header.projectId) &&
-                    (!header.supplierId ||
+                    (!header.value.projectId || item.projectId === header.value.projectId) &&
+                    (!header.value.supplierId ||
                       !item.supplierId ||
-                      item.supplierId === header.supplierId) &&
+                      item.supplierId === header.value.supplierId) &&
                     (kind.value === 'purchase_order' ||
                       ['approved', 'completed'].includes(item.status))
                 )
@@ -2314,7 +2306,7 @@
                 })),
               filterable: true,
               clearable: true,
-              disabled: !header.tenantId || Boolean(recordId.value),
+              disabled: !header.value.tenantId || Boolean(recordId.value),
               loading: loading.value,
               placeholder: '选择来源并带入未转换明细'
             }
@@ -2359,7 +2351,7 @@
                 : field.key === 'constructionNo'
                   ? {
                       options: projectSections.value
-                        .filter((section) => section.projectId === header.projectId)
+                        .filter((section) => section.projectId === header.value.projectId)
                         .map((section) => ({
                           label: `${section.constructionNo} · ${section.sectionName}`,
                           value: section.constructionNo,
@@ -2369,7 +2361,9 @@
                       filterable: true,
                       allowCreate: true,
                       defaultFirstOption: true,
-                      placeholder: header.projectId ? '选择或填写施工号（可选）' : '可填写施工号'
+                      placeholder: header.value.projectId
+                        ? '选择或填写施工号（可选）'
+                        : '可填写施工号'
                     }
                   : {
                       options: userStore.getDictMap?.scmContractEffectiveness ?? [],
@@ -2482,9 +2476,9 @@
                 line.unit = material.purchaseUnit || material.baseUnitName || material.unit || ''
               }
             }
-            line.department ||= details.department
-            line.applicant ||= details.applicant
-            line.applicantName ||= details.applicantName
+            line.department ||= details.value.department
+            line.applicant ||= details.value.applicant
+            line.applicantName ||= details.value.applicantName
             recalculateOrderUnits(line)
             updateTaxInclusiveUnitPrice(line)
             continue
@@ -2532,8 +2526,11 @@
       const availableTypes = documentTypes.value.filter((item) =>
         item.menuIds.includes(menuIds.value[kind.value])
       )
-      if (!recordId.value && !availableTypes.some((item) => item.id === header.documentTypeId)) {
-        header.documentTypeId = availableTypes.find((item) => item.isDefault)?.id ?? ''
+      if (
+        !recordId.value &&
+        !availableTypes.some((item) => item.id === header.value.documentTypeId)
+      ) {
+        header.value.documentTypeId = availableTypes.find((item) => item.isDefault)?.id ?? ''
       }
       referencesLoaded.value = true
       return true
@@ -2613,7 +2610,7 @@
   async function recommendReceiptBin(line: ScmPurchaseLine): Promise<void> {
     if (recommendingLineId.value) return
     recalculateReceiptUnits(line)
-    const tenantId = header.tenantId
+    const tenantId = header.value.tenantId
     const warehouseId = line.warehouseId
     const materialId = line.materialId
     const quantity = line.stockQuantity
@@ -2633,7 +2630,7 @@
       isScopeCurrent() &&
       Boolean(unref(dialogRef.value?.visible)) &&
       kind.value === 'receipt_notice' &&
-      header.tenantId === tenantId &&
+      header.value.tenantId === tenantId &&
       lines.value.includes(line) &&
       line.warehouseId === warehouseId &&
       line.materialId === materialId &&
@@ -2711,11 +2708,11 @@
   function applyOrderContractPrice(line: ScmPurchaseLine): void {
     if (kind.value !== 'purchase_order') return
     const price = findPurchaseContractPrice(purchaseContracts.value, {
-      tenantId: header.tenantId,
-      supplierId: header.supplierId,
-      projectId: header.projectId || null,
+      tenantId: header.value.tenantId,
+      supplierId: header.value.supplierId,
+      projectId: header.value.projectId || null,
       materialId: line.materialId,
-      documentDate: header.documentDate
+      documentDate: header.value.documentDate
     })
     if (!price) {
       if (line.pricingContractId) {
@@ -2742,7 +2739,7 @@
     updateTaxInclusiveUnitPrice(line)
   }
   watch(
-    () => [header.supplierId, header.projectId, header.documentDate],
+    () => [header.value.supplierId, header.value.projectId, header.value.documentDate],
     () => {
       if (kind.value === 'purchase_order' && referencesLoaded.value && !preparing) {
         for (const line of lines.value) applyOrderContractPrice(line)
@@ -2813,7 +2810,7 @@
     applyOrderContractPrice(line)
   }
   function setEmployeeName(key: 'buyer' | 'applicant' | 'keeper', rows: EmployeeIntegrationItem[]) {
-    details[`${key}Name`] = rows[0]?.employeeName ?? ''
+    details.value[`${key}Name`] = rows[0]?.employeeName ?? ''
   }
   async function addSelectedMaterials() {
     selectedMaterialIds.value = []
@@ -2889,9 +2886,9 @@
     return (
       generation === sourceSelectionGeneration &&
       !sourceSelectionController?.signal.aborted &&
-      header.tenantId === context.tenantId &&
-      header.supplierId === context.supplierId &&
-      header.projectId === context.projectId &&
+      header.value.tenantId === context.tenantId &&
+      header.value.supplierId === context.supplierId &&
+      header.value.projectId === context.projectId &&
       receiptSourceOrderId.value === context.sourceOrderId &&
       context.isScopeCurrent()
     )
@@ -2908,8 +2905,8 @@
       isScopeCurrent() &&
       !signal.aborted &&
       sourceLineSource.value === source &&
-      header.tenantId === source.tenantId &&
-      header.sourceId === source.id
+      header.value.tenantId === source.tenantId &&
+      header.value.sourceId === source.id
     sourceLineLoadError.value = false
     sourceLineDialogRef.value?.setLoading(true)
     try {
@@ -2930,14 +2927,14 @@
   }
   async function importSourceLines() {
     if (kind.value === 'receipt_notice') {
-      if (!header.supplierId) {
+      if (!header.value.supplierId) {
         ElMessage.warning('请先参选供应商')
         return
       }
       const context: ReceiptSourceContext = {
-        tenantId: header.tenantId,
-        supplierId: header.supplierId,
-        projectId: header.projectId,
+        tenantId: header.value.tenantId,
+        supplierId: header.value.supplierId,
+        projectId: header.value.projectId,
         sourceOrderId: receiptSourceOrderId.value,
         isScopeCurrent: captureDialogScope()
       }
@@ -2989,7 +2986,7 @@
       }
       return
     }
-    const source = sourceDocuments.value.find((item) => item.id === header.sourceId)
+    const source = sourceDocuments.value.find((item) => item.id === header.value.sourceId)
     if (!source) return
     sourceLineSource.value = source
     sourceLineLoadError.value = false
@@ -3012,10 +3009,11 @@
           ElMessage.warning('请选择至少一行来源明细')
           return false
         }
-        header.projectId = source.projectId ?? ''
-        header.supplierId = source.supplierId ?? header.supplierId
-        if (kind.value === 'receipt_notice' && !details.contractNo)
-          details.contractNo = source.paymentPlans.find((plan) => plan.contractNo)?.contractNo ?? ''
+        header.value.projectId = source.projectId ?? ''
+        header.value.supplierId = source.supplierId ?? header.value.supplierId
+        if (kind.value === 'receipt_notice' && !details.value.contractNo)
+          details.value.contractNo =
+            source.paymentPlans.find((plan) => plan.contractNo)?.contractNo ?? ''
         let lineNo = nextLineNo()
         if (
           kind.value === 'purchase_order' &&
@@ -3069,15 +3067,15 @@
   }
   function inheritReceiptEmployees(orders: ScmPurchaseDocument[]): void {
     for (const key of ['buyer', 'keeper'] as const) {
-      if (details[key]) continue
+      if (details.value[key]) continue
       const values = uniq(orders.map((order) => order.details[key]).filter(Boolean))
       if (values.length === 1) {
         const order = orders.find((item) => item.details[key] === values[0])!
-        details[key] = values[0]
-        details[`${key}Name`] = order.details[`${key}Name`]
+        details.value[key] = values[0]
+        details.value[`${key}Name`] = order.details[`${key}Name`]
       }
     }
-    if (!details.keeper) {
+    if (!details.value.keeper) {
       const keepers = uniq(
         lines.value
           .map(
@@ -3086,16 +3084,16 @@
           )
           .filter(Boolean)
       )
-      if (keepers.length === 1) details.keeper = keepers[0]!
+      if (keepers.length === 1) details.value.keeper = keepers[0]!
     }
     for (const key of ['buyer', 'keeper'] as const) {
       selectedEmployees[key] =
-        details[key] && details[`${key}Name`]
+        details.value[key] && details.value[`${key}Name`]
           ? [
               {
-                id: details[key]!,
-                tenantId: header.tenantId,
-                employeeName: details[`${key}Name`]!,
+                id: details.value[key]!,
+                tenantId: header.value.tenantId,
+                employeeName: details.value[`${key}Name`]!,
                 employeeNo: '',
                 employmentStatus: ''
               }
@@ -3141,7 +3139,7 @@
       ElMessage.warning('同一张收料通知单只能选择同一项目的采购订单')
       return
     }
-    header.projectId = selected[0].projectId
+    header.value.projectId = selected[0].projectId
     let lineNo = nextLineNo()
     const addedLineIds: string[] = []
     for (const choice of selected) {
@@ -3157,14 +3155,14 @@
       addedLineIds.push(line.lineId)
     }
     const revision = openRevision
-    const confirmedProjectId = header.projectId
+    const confirmedProjectId = header.value.projectId
     const isCurrent = () =>
       revision === openRevision &&
       context.isScopeCurrent() &&
       kind.value === 'receipt_notice' &&
-      header.tenantId === context.tenantId &&
-      header.supplierId === context.supplierId &&
-      header.projectId === confirmedProjectId &&
+      header.value.tenantId === context.tenantId &&
+      header.value.supplierId === context.supplierId &&
+      header.value.projectId === confirmedProjectId &&
       receiptSourceOrderId.value === context.sourceOrderId &&
       addedLineIds.every((id) => lines.value.some((line) => line.lineId === id))
     try {
@@ -3360,7 +3358,7 @@
   async function applyRecentPrices() {
     if (recentPricesLoading.value || !lines.value.length) return
     const revision = openRevision
-    const tenantId = header.tenantId
+    const tenantId = header.value.tenantId
     const targets = lines.value.map((line) => ({
       line,
       materialId: line.materialId,
@@ -3373,7 +3371,7 @@
         tenantId,
         targets.map((item) => item.materialId)
       )
-      if (revision !== openRevision || tenantId !== header.tenantId) return
+      if (revision !== openRevision || tenantId !== header.value.tenantId) return
       let count = 0
       for (const target of targets) {
         const { line } = target
@@ -3390,7 +3388,7 @@
       }
       ElMessage.success(count ? `已更新 ${count} 项最近采购价` : '暂无可更新的历史采购价')
     } catch (error) {
-      if (revision === openRevision && tenantId === header.tenantId)
+      if (revision === openRevision && tenantId === header.value.tenantId)
         notifyFriendlyError(error, '最近采购价加载失败，请稍后重试')
     } finally {
       if (revision === openRevision) recentPricesLoading.value = false
@@ -3471,27 +3469,27 @@
   function validateBusiness() {
     if (
       kind.value === 'receipt_notice' &&
-      header.projectId &&
+      header.value.projectId &&
       !projectSections.value.some(
         (section) =>
-          section.projectId === header.projectId &&
-          section.constructionNo === details.constructionNo &&
+          section.projectId === header.value.projectId &&
+          section.constructionNo === details.value.constructionNo &&
           section.status === 'active'
       )
     ) {
       ElMessage.warning('施工号未匹配当前项目的启用记录，本次仍可保存')
     }
-    if (kind.value !== 'purchase_request' && !header.supplierId) {
+    if (kind.value !== 'purchase_request' && !header.value.supplierId) {
       ElMessage.warning('请选择供应商')
       return false
     }
-    if (kind.value === 'purchase_order' && !details.buyer) {
+    if (kind.value === 'purchase_order' && !details.value.buyer) {
       ElMessage.warning('采购员尚未指定，可在订单草稿中补充')
     }
     if (
       kind.value === 'purchase_order' &&
-      (details.ownerType === 'supplier' || details.ownerType === 'customer') &&
-      !details.ownerId
+      (details.value.ownerType === 'supplier' || details.value.ownerType === 'customer') &&
+      !details.value.ownerId
     ) {
       ElMessage.warning('请选择货主')
       return false
@@ -3616,16 +3614,16 @@
 
     try {
       const input: ScmPurchaseWrite = {
-        tenantId: header.tenantId,
+        tenantId: header.value.tenantId,
         kind: kind.value,
-        documentNo: header.documentNo,
-        documentTypeId: header.documentTypeId || null,
-        projectId: header.projectId || null,
-        supplierId: header.supplierId || null,
-        sourceId: header.sourceId || null,
-        documentDate: header.documentDate,
-        deliveryDate: header.deliveryDate || null,
-        details: { ...details },
+        documentNo: header.value.documentNo,
+        documentTypeId: header.value.documentTypeId || null,
+        projectId: header.value.projectId || null,
+        supplierId: header.value.supplierId || null,
+        sourceId: header.value.sourceId || null,
+        documentDate: header.value.documentDate,
+        deliveryDate: header.value.deliveryDate || null,
+        details: { ...details.value },
         lines: lines.value.map((line) => {
           if (kind.value !== 'receipt_notice' && kind.value !== 'purchase_order')
             return { ...line, quantity: line.quantity ?? null }
@@ -3641,7 +3639,7 @@
         paymentPlans: paymentPlans.value,
         deliveryPlans: deliveryPlans.value,
         clauses: clauses.value,
-        remark: header.remark
+        remark: header.value.remark
       }
       if (recordId.value) await updateScmPurchaseDocument(recordId.value, input)
       else await createScmPurchaseDocument(input)
@@ -3667,7 +3665,7 @@
     )
     recordId.value = options.copy ? undefined : options.record?.id
     tenantOptions.value = options.tenantOptions
-    Object.assign(header, emptyHeader(), options.record ?? {}, {
+    Object.assign(header.value, emptyHeader(), options.record ?? {}, {
       tenantId:
         options.record?.tenantId ??
         options.initialSource?.tenantId ??
@@ -3682,20 +3680,21 @@
       deliveryDate: options.record?.deliveryDate ?? '',
       remark: options.record?.remark ?? ''
     })
-    for (const key of Object.keys(details)) delete details[key as keyof ScmPurchaseDetails]
-    Object.assign(details, options.record?.details ?? {}, {
+    for (const key of Object.keys(details.value))
+      delete details.value[key as keyof ScmPurchaseDetails]
+    Object.assign(details.value, options.record?.details ?? {}, {
       paymentMode: options.record?.details.paymentMode ?? 'amount',
       ...(kind.value === 'purchase_order' && !options.record
         ? {
             ownerType: 'self' as const,
             buyer:
               (userStore.getUserInfo.hrEmployee?.tenantId || userStore.getUserInfo.tenantId) ===
-              header.tenantId
+              header.value.tenantId
                 ? userStore.getUserInfo.hrEmployeeId || undefined
                 : undefined,
             buyerName:
               (userStore.getUserInfo.hrEmployee?.tenantId || userStore.getUserInfo.tenantId) ===
-              header.tenantId
+              header.value.tenantId
                 ? userStore.getUserInfo.hrEmployee?.employeeName
                 : undefined
           }
@@ -3723,12 +3722,12 @@
     })
     for (const key of ['buyer', 'applicant', 'keeper'] as const) {
       selectedEmployees[key] =
-        details[key] && details[`${key}Name`]
+        details.value[key] && details.value[`${key}Name`]
           ? [
               {
-                id: details[key]!,
-                tenantId: header.tenantId,
-                employeeName: details[`${key}Name`]!,
+                id: details.value[key]!,
+                tenantId: header.value.tenantId,
+                employeeName: details.value[`${key}Name`]!,
                 employeeNo: '',
                 employmentStatus: ''
               }
@@ -3778,14 +3777,14 @@
       })) ?? []
     activeTab.value = 'lines'
     if (options.initialSource && options.kind === 'purchase_order') {
-      header.sourceId = options.initialSource.id
-      header.projectId = options.initialSource.projectId ?? ''
+      header.value.sourceId = options.initialSource.id
+      header.value.projectId = options.initialSource.projectId ?? ''
     }
     if (options.initialSource && options.kind === 'receipt_notice') {
       selectAfterSupplier.value = false
       receiptSourceOrderId.value = options.initialSource.id
-      header.projectId = options.initialSource.projectId ?? ''
-      header.supplierId = options.initialSource.supplierId ?? ''
+      header.value.projectId = options.initialSource.projectId ?? ''
+      header.value.supplierId = options.initialSource.supplierId ?? ''
     }
     await dialogRef.value?.handleOpen(options, {
       title: options.copy
@@ -3847,7 +3846,7 @@
           )
         )
           throw new Error('请选择同一租户、项目和供应商的采购订单')
-        Object.assign(header, {
+        Object.assign(header.value, {
           tenantId: first.tenantId,
           projectId: first.projectId ?? '',
           supplierId: first.supplierId ?? ''
@@ -3876,7 +3875,7 @@
           )
         )
           throw new Error('请选择同一租户、同一项目的采购申请')
-        Object.assign(header, {
+        Object.assign(header.value, {
           tenantId: initialRequests[0].tenantId,
           projectId: initialRequests[0].projectId ?? '',
           sourceId: initialRequests.length === 1 ? initialRequests[0].id : ''
@@ -3897,13 +3896,13 @@
           initializationError.value = '来源单据已变化或没有可引用明细，请关闭后重新选择。'
           return
         }
-        header.tenantId = source.tenantId
-        header.projectId = source.projectId ?? ''
-        if (options.kind === 'purchase_order') header.sourceId = source.id
+        header.value.tenantId = source.tenantId
+        header.value.projectId = source.projectId ?? ''
+        if (options.kind === 'purchase_order') header.value.sourceId = source.id
         else {
           selectAfterSupplier.value = false
           receiptSourceOrderId.value = source.id
-          header.supplierId = source.supplierId ?? ''
+          header.value.supplierId = source.supplierId ?? ''
         }
       }
       await Promise.all(
@@ -3918,16 +3917,16 @@
         ].map((code) => userStore.ensureDictLoaded(code))
       )
       if (revision !== openRevision || !unref(api.visible)) return
-      if (!(await loadReferences(header.tenantId))) {
+      if (!(await loadReferences(header.value.tenantId))) {
         initializationError.value = '关联主数据暂时不可用，请重新加载后继续填写。'
         return
       }
       if (revision !== openRevision || !unref(api.visible)) return
       if (initialOrders.length && !lines.value.length) {
         const available = await fetchScmReceiptOrderLineChoices(
-          header.tenantId,
-          header.supplierId,
-          header.projectId || undefined
+          header.value.tenantId,
+          header.value.supplierId,
+          header.value.projectId || undefined
         )
         if (revision !== openRevision || !unref(api.visible)) return
         const draftLines: ScmPurchaseLine[] = []
@@ -4035,9 +4034,9 @@
     }
     if (revision !== openRevision || !unref(api.visible) || initializationError.value) return
     if (options.openLineSelector) {
-      if (options.kind === 'purchase_order' && header.sourceId) void importSourceLines()
+      if (options.kind === 'purchase_order' && header.value.sourceId) void importSourceLines()
       else if (options.kind === 'purchase_request') void importQuotationLines()
-      else if (options.kind === 'receipt_notice' && header.supplierId) {
+      else if (options.kind === 'receipt_notice' && header.value.supplierId) {
         selectAfterSupplier.value = false
         void importSourceLines()
       }
@@ -4050,21 +4049,21 @@
     }
   }
   watch(
-    () => header.tenantId,
+    () => header.value.tenantId,
     (tenantId, previous) => {
       if (preparing || tenantId === previous) return
       invalidateRecommendation()
       invalidateSourceSelection()
-      header.projectId = ''
-      header.documentTypeId = ''
-      header.supplierId = ''
-      header.sourceId = ''
+      header.value.projectId = ''
+      header.value.documentTypeId = ''
+      header.value.supplierId = ''
+      header.value.sourceId = ''
       lines.value = []
       void loadReferences(tenantId)
     }
   )
   watch(
-    () => header.sourceId,
+    () => header.value.sourceId,
     (sourceId, previous) => {
       if (!preparing && sourceId !== previous) invalidateSourceSelection()
       if (!preparing && sourceId !== previous)
@@ -4073,7 +4072,7 @@
     }
   )
   watch(
-    () => header.supplierId,
+    () => header.value.supplierId,
     (supplierId, previous) => {
       if (preparing || kind.value !== 'receipt_notice' || supplierId === previous) return
       invalidateSourceSelection()
@@ -4085,7 +4084,7 @@
     }
   )
   watch(
-    () => header.projectId,
+    () => header.value.projectId,
     (projectId, previous) => {
       if (!preparing && kind.value === 'receipt_notice' && projectId !== previous)
         invalidateSourceSelection()
@@ -4099,16 +4098,16 @@
     }
   )
   watch(
-    () => details.ownerType,
+    () => details.value.ownerType,
     (ownerType, previous) => {
-      if (!preparing && ownerType !== previous) details.ownerId = undefined
+      if (!preparing && ownerType !== previous) details.value.ownerId = undefined
     }
   )
   watch(
-    [() => details.paymentMode, totalAmount, paymentPlans],
+    [() => details.value.paymentMode, totalAmount, paymentPlans],
     () => {
       for (const plan of paymentPlans.value) {
-        if (details.paymentMode === 'ratio')
+        if (details.value.paymentMode === 'ratio')
           plan.amount = Math.round(totalAmount.value * plan.ratio) / 100
         else
           plan.ratio =

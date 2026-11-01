@@ -1,14 +1,6 @@
 <template>
   <ArtDialog ref="dialogRef" size="sm">
-    <ArtForm
-      ref="formRef"
-      v-model="form.data"
-      :items="form.items"
-      :rules="form.rules"
-      :span="24"
-      :show-submit="false"
-      :show-reset="false"
-    >
+    <ArtForm ref="formRef" v-model="form.data" :items="form.items" :rules="form.rules" :span="24">
       <template #buyer>
         <ArtEmployeeSelect
           v-model="form.data.buyer"

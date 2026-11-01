@@ -130,6 +130,13 @@ export async function updateQuoteExpense(id: string, input: QuoteExpenseWrite) {
 export async function deleteQuoteExpense(id: string) {
   return responseHandle(
     () => supabase.from('scm_quote_expense').delete({ count: 'exact' }).eq('id', id),
-    { showMessage: true, breakReturn: true, requireAffected: true, message: '报价费用已删除' }
+    {
+      showReferenceFeedback: false,
+      showErrorMessage: false,
+      showMessage: true,
+      breakReturn: true,
+      requireAffected: true,
+      message: '报价费用已删除'
+    }
   )
 }
