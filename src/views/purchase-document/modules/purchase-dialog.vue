@@ -28,36 +28,6 @@
           :gutter="20"
           label-width="112px"
         >
-          <template #projectId>
-            <ArtTableSingleSelect
-              v-model="header.projectId"
-              :data="projects"
-              :columns="projectPickerColumns"
-              row-key="id"
-              :label-key="projectPickerLabel"
-              title="参选项目"
-              search-placeholder="搜索项目编号或名称"
-              :disabled="!header.tenantId || Boolean(header.sourceId)"
-              empty-text="暂无可选项目"
-              empty-description="请先在 MDM 项目列表维护项目。"
-              dialog-width="xl"
-            />
-          </template>
-          <template #supplierId>
-            <ArtTableSingleSelect
-              v-model="header.supplierId"
-              :data="suppliers"
-              :columns="supplierPickerColumns"
-              row-key="id"
-              :label-key="supplierPickerLabel"
-              title="参选供应商"
-              search-placeholder="搜索供应商编码或名称"
-              :disabled="!header.tenantId"
-              empty-text="暂无可选供应商"
-              empty-description="请先在 MDM 供应商主数据中维护供应商。"
-              dialog-width="lg"
-            />
-          </template>
         </ArtForm>
       </ArtSectionCard>
       <ArtSectionCard
@@ -66,58 +36,6 @@
         subtitle="填写当前单据需要的补充信息。"
       >
         <ArtForm v-model="details" :items="detailItems" :span="12" :gutter="20" label-width="112px">
-          <template #buyer>
-            <ArtEmployeeSelect
-              v-model="details.buyer"
-              v-model:selected-data="selectedEmployees.buyer"
-              :tenant-id="header.tenantId"
-              placeholder="选择采购员"
-              @change="(_, rows) => setEmployeeName('buyer', rows)"
-            />
-          </template>
-          <template #applicant>
-            <ArtEmployeeSelect
-              v-model="details.applicant"
-              v-model:selected-data="selectedEmployees.applicant"
-              :tenant-id="header.tenantId"
-              placeholder="选择申请人"
-              @change="(_, rows) => setEmployeeName('applicant', rows)"
-            />
-          </template>
-          <template #keeper>
-            <ArtEmployeeSelect
-              v-model="details.keeper"
-              v-model:selected-data="selectedEmployees.keeper"
-              :tenant-id="header.tenantId"
-              placeholder="选择库管员"
-              @change="(_, rows) => setEmployeeName('keeper', rows)"
-            />
-          </template>
-          <template #ownerId>
-            <ArtTableSingleSelect
-              v-if="details.ownerType === 'supplier'"
-              v-model="details.ownerId"
-              :data="suppliers"
-              :columns="supplierPickerColumns"
-              row-key="id"
-              :label-key="supplierPickerLabel"
-              title="参选货主供应商"
-              search-placeholder="搜索供应商编码或名称"
-              :disabled="!header.tenantId"
-            />
-            <ArtTableSingleSelect
-              v-else-if="details.ownerType === 'customer'"
-              v-model="details.ownerId"
-              :data="customers"
-              :columns="customerPickerColumns"
-              row-key="id"
-              :label-key="customerPickerLabel"
-              title="参选货主客户"
-              search-placeholder="搜索客户编码或名称"
-              :disabled="!header.tenantId"
-            />
-            <ElInput v-else model-value="" disabled placeholder="自有无需选择货主" />
-          </template>
         </ArtForm>
       </ArtSectionCard>
       <ElTabs v-model="activeTab" class="min-w-0">
@@ -305,94 +223,34 @@
                 ><ArtSvgIcon icon="ri:add-line" />添加计划</ElButton
               ></template
             >
-            <div v-if="kind === 'purchase_contract' || kind === 'purchase_order'" class="min-w-0">
-              <div
-                class="mb-3 flex flex-wrap items-center gap-3 text-sm text-[var(--art-gray-700)]"
-              >
-                <span>按比例（%）</span>
-                <ElSwitch
-                  :model-value="details.paymentMode === 'ratio'"
-                  aria-label="按比例编制付款计划"
-                  @update:model-value="
-                    (enabled) => (details.paymentMode = enabled === true ? 'ratio' : 'amount')
-                  "
-                />
-                <span class="text-xs text-[var(--art-gray-600)]">{{
-                  details.paymentMode === 'ratio'
-                    ? '填写应付比例，自动计算金额'
-                    : '填写应付金额，自动计算比例'
-                }}</span>
-              </div>
-              <ArtTable
-                :data="paymentPlans"
-                :columns="paymentColumns"
-                :pagination="false"
-                row-key="id"
-                table-layout="fixed"
-                border
-                :max-height="380"
-                :scrollbar-always-on="false"
-                empty-text="暂无付款计划"
-                empty-description="点击“添加计划”设置每期应付。"
-              />
-            </div>
-            <div v-else class="mb-4 flex items-center gap-3 text-sm"
-              ><span>计划方式</span
-              ><ElRadioGroup v-model="details.paymentMode">
-                <ElRadioButton
-                  v-for="option in paymentModeOptions"
-                  :key="option.value"
-                  :value="option.value"
-                  >{{ option.label }}</ElRadioButton
-                >
-              </ElRadioGroup></div
-            >
-            <template v-if="kind !== 'purchase_contract' && kind !== 'purchase_order'">
-              <div
-                v-for="(plan, index) in paymentPlans"
-                :key="plan.id"
-                class="mb-3 grid grid-cols-1 gap-3 rounded-lg border border-[var(--el-border-color-light)] p-3 sm:grid-cols-2 xl:grid-cols-5"
-              >
-                <ElDatePicker
-                  v-model="plan.dueDate"
-                  type="date"
-                  value-format="YYYY-MM-DD"
-                  placeholder="到期日期"
-                  class="w-full!"
-                />
-                <ElInputNumber
-                  v-model="plan.ratio"
-                  :min="0"
-                  :max="100"
-                  :precision="2"
-                  :controls="false"
-                  :disabled="details.paymentMode !== 'ratio'"
-                  class="w-full!"
-                  aria-label="应付比例"
-                />
-                <ElInputNumber
-                  v-model="plan.amount"
-                  :min="0"
-                  :precision="2"
-                  :controls="false"
-                  :disabled="details.paymentMode === 'ratio'"
-                  class="w-full!"
-                  aria-label="应付金额"
-                />
-                <ElCheckbox v-model="plan.isAdvance">预付</ElCheckbox>
-                <ArtIconButton
+            <ArtForm
+              :model-value="planForm"
+              :items="paymentFormItems"
+              :span="6"
+              :gutter="16"
+              root-class="p-0! md:p-0!"
+              ><template #paymentTable
+                ><ArtTable
+                  :data="paymentPlans"
+                  :columns="paymentColumns"
+                  :pagination="false"
+                  row-key="id"
+                  table-layout="fixed"
+                  border
+                  :max-height="380"
+                  :scrollbar-always-on="false"
+                  empty-text="暂无付款计划"
+                  empty-description="点击“添加计划”设置每期应付。" /></template
+              ><template
+                v-for="(entry, index) in paymentPlans"
+                :key="entry.id"
+                #[`paymentPlans_${index}Actions`]
+                ><ArtIconButton
                   icon="ri:delete-bin-line"
                   label="移除付款计划"
                   tone="danger"
-                  @click="paymentPlans.splice(index, 1)"
-                />
-                <ElInput
-                  v-model="plan.remark"
-                  placeholder="计划备注"
-                  class="sm:col-span-2 xl:col-span-5"
-                />
-              </div>
-            </template>
+                  @click="paymentPlans.splice(index, 1)" /></template
+            ></ArtForm>
           </ArtSectionCard>
         </ElTabPane>
         <ElTabPane v-if="config.tabs.includes('deliveries')" label="交货计划" name="deliveries">
@@ -421,73 +279,26 @@
               :scrollbar-always-on="false"
               empty-text="暂无交货计划"
               empty-description="点击“添加计划”，再参选订单物料明细。"
-            />
-            <div
+            /><ArtForm
               v-else
-              v-for="(plan, index) in deliveryPlans"
-              :key="plan.id"
-              class="mb-3 rounded-lg border border-[var(--el-border-color-light)] p-3"
-            >
-              <div class="mb-3 flex items-center justify-between gap-2">
-                <strong class="text-sm">第 {{ index + 1 }} 期交货</strong>
-                <div
-                  ><ArtIconButton
-                    icon="ri:file-copy-line"
-                    label="复制交货计划"
-                    @click="copyDelivery(plan)" />
-                  <ArtIconButton
-                    icon="ri:delete-bin-line"
-                    label="移除交货计划"
-                    tone="danger"
-                    @click="deliveryPlans.splice(index, 1)"
-                /></div>
-              </div>
-              <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <label class="flex min-w-0 flex-col gap-1 text-xs text-[var(--art-gray-600)]"
-                  >计划交货日期
-                  <ElDatePicker
-                    v-model="plan.plannedDate"
-                    type="date"
-                    value-format="YYYY-MM-DD"
-                    class="w-full!"
-                  />
-                </label>
-                <label class="flex min-w-0 flex-col gap-1 text-xs text-[var(--art-gray-600)]"
-                  >计划交货数量
-                  <ElInputNumber
-                    v-model="plan.quantity"
-                    :min="0.001"
-                    :precision="3"
-                    :controls="false"
-                    class="w-full!"
-                  />
-                </label>
-                <label class="flex min-w-0 flex-col gap-1 text-xs text-[var(--art-gray-600)]"
-                  >计划交货基本数量
-                  <ElInputNumber
-                    v-model="plan.plannedBaseQuantity"
-                    :min="0"
-                    :precision="3"
-                    :controls="false"
-                    class="w-full!"
-                  />
-                </label>
-                <label class="flex min-w-0 flex-col gap-1 text-xs text-[var(--art-gray-600)]"
-                  >交货地点
-                  <ElInput v-model="plan.location" placeholder="交货地点" />
-                </label>
-                <label
-                  class="flex min-w-0 flex-col gap-1 text-xs text-[var(--art-gray-600)] sm:col-span-2"
-                  >交货地址
-                  <ElInput v-model="plan.address" placeholder="交货地址" />
-                </label>
-                <label
-                  class="flex min-w-0 flex-col gap-1 text-xs text-[var(--art-gray-600)] sm:col-span-2"
-                  >备注
-                  <ElInput v-model="plan.remark" placeholder="备注" />
-                </label>
-              </div>
-            </div>
+              :model-value="planForm"
+              :items="deliveryFormItems"
+              :span="6"
+              :gutter="16"
+              root-class="p-0! md:p-0!"
+              ><template
+                v-for="(entry, index) in deliveryPlans"
+                :key="entry.id"
+                #[`deliveryPlans_${index}Actions`]
+                ><ArtIconButton
+                  icon="ri:file-copy-line"
+                  label="复制交货计划"
+                  @click="copyDelivery(entry)" /><ArtIconButton
+                  icon="ri:delete-bin-line"
+                  label="移除交货计划"
+                  tone="danger"
+                  @click="deliveryPlans.splice(index, 1)" /></template
+            ></ArtForm>
           </ArtSectionCard>
         </ElTabPane>
         <ElTabPane v-if="config.tabs.includes('clauses')" label="合同条款" name="clauses">
@@ -516,37 +327,23 @@
               :scrollbar-always-on="false"
               empty-text="暂无合同条款"
               empty-description="点击“添加条款”选择字典条款并填写内容。"
-            />
-            <div
+            /><ArtForm
               v-else
-              v-for="(clause, index) in clauses"
-              :key="clause.id"
-              class="mb-3 flex flex-col gap-3 rounded-lg border border-[var(--el-border-color-light)] p-3"
-            >
-              <div class="flex gap-2"
-                ><ElSelect v-model="clause.title" placeholder="选择条款" class="min-w-0 flex-1">
-                  <ElOption
-                    v-for="item in clauseOptions"
-                    :key="item.value"
-                    :label="item.label"
-                    :value="item.value"
-                  /> </ElSelect
+              :model-value="planForm"
+              :items="clauseFormItems"
+              :span="24"
+              :gutter="16"
+              root-class="p-0! md:p-0!"
+              ><template
+                v-for="(entry, index) in clauses"
+                :key="entry.id"
+                #[`clauses_${index}Actions`]
                 ><ArtIconButton
                   icon="ri:delete-bin-line"
                   label="移除合同条款"
                   tone="danger"
-                  @click="clauses.splice(index, 1)"
-                />
-              </div>
-              <ElInput
-                v-model="clause.content"
-                type="textarea"
-                :rows="3"
-                maxlength="2000"
-                show-word-limit
-                placeholder="填写条款内容"
-              />
-            </div>
+                  @click="clauses.splice(index, 1)" /></template
+            ></ArtForm>
           </ArtSectionCard>
         </ElTabPane>
       </ElTabs>
@@ -737,8 +534,8 @@
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import ArtTable, { type ArtTableExpose } from '@/components/core/tables/art-table/index.vue'
   import ArtIconButton from '@/components/core/widget/art-icon-button/index.vue'
-  import ArtEmployeeSelect from '@/components/business/art-employee-select/index.vue'
   import ArtMaterialSelect from '@/components/business/art-material-select/index.vue'
+  import ArtEmployeeSelect from '@/components/business/art-employee-select/index.vue'
   import type { MaterialSelectRecord } from '@/components/business/art-material-select/types'
   import type { ColumnOption } from '@/types'
   import type { DataSelectFetchParams } from '@/components/core/forms/art-data-select/types'
@@ -2249,15 +2046,35 @@
     {
       label: '项目名称',
       key: 'projectId',
-      type: 'slot',
+      type: 'dataSelect',
       props: {
-        options: projects.value.map((item) => ({
-          label: `${item.projectName}（${item.projectCode}）`,
-          value: item.id
-        })),
-        filterable: true,
+        ...{
+          options: projects.value.map((item) => ({
+            label: `${item.projectName}（${item.projectCode}）`,
+            value: item.id
+          })),
+          filterable: true,
+          disabled: !header.value.tenantId || Boolean(header.value.sourceId),
+          loading: loading.value
+        },
+        mode: 'table',
+        multiple: false,
+        modelValue: header.value.projectId,
+        'onUpdate:modelValue': (value: typeof header.value.projectId) => {
+          header.value.projectId = value
+        },
+        data: projects.value,
+        columns: projectPickerColumns,
+        rowKey: 'id',
+        labelKey: projectPickerLabel,
+        title: '参选项目',
+        searchPlaceholder: '搜索项目编号或名称',
         disabled: !header.value.tenantId || Boolean(header.value.sourceId),
-        loading: loading.value
+        emptyText: '暂无可选项目',
+        emptyDescription: '请先在 MDM 项目列表维护项目。',
+        dialogWidth: 'xl',
+        showSelectedPanel: false,
+        showPagination: false
       }
     },
     ...(kind.value !== 'purchase_request'
@@ -2265,18 +2082,38 @@
           {
             label: '供应商全称',
             key: 'supplierId',
-            type: 'slot',
+            type: 'dataSelect',
             props: {
-              options: suppliers.value.map((item) => ({
-                label: `${item.supplierName}（${item.supplierCode}）`,
-                value: item.id
-              })),
-              filterable: true,
-              clearable: true,
-              disabled:
-                !header.value.tenantId ||
-                (kind.value === 'receipt_notice' && Boolean(header.value.sourceId)),
-              loading: loading.value
+              ...{
+                options: suppliers.value.map((item) => ({
+                  label: `${item.supplierName}（${item.supplierCode}）`,
+                  value: item.id
+                })),
+                filterable: true,
+                clearable: true,
+                disabled:
+                  !header.value.tenantId ||
+                  (kind.value === 'receipt_notice' && Boolean(header.value.sourceId)),
+                loading: loading.value
+              },
+              mode: 'table',
+              multiple: false,
+              modelValue: header.value.supplierId,
+              'onUpdate:modelValue': (value: typeof header.value.supplierId) => {
+                header.value.supplierId = value
+              },
+              data: suppliers.value,
+              columns: supplierPickerColumns,
+              rowKey: 'id',
+              labelKey: supplierPickerLabel,
+              title: '参选供应商',
+              searchPlaceholder: '搜索供应商编码或名称',
+              disabled: !header.value.tenantId,
+              emptyText: '暂无可选供应商',
+              emptyDescription: '请先在 MDM 供应商主数据中维护供应商。',
+              dialogWidth: 'lg',
+              showSelectedPanel: false,
+              showPagination: false
             }
           } as FormItem
         ]
@@ -2334,43 +2171,234 @@
     }
   ])
   const menuIds = ref<Record<string, string>>({})
+
+  const planForm = reactive({ details, paymentPlans, deliveryPlans, clauses })
+  const paymentFormItems = computed<FormItem[]>(() => {
+    const tableMode = kind.value === 'purchase_contract' || kind.value === 'purchase_order'
+    return [
+      {
+        key: 'details.paymentMode',
+        label: '付款计划方式',
+        type: tableMode ? 'switch' : 'radioGroup',
+        span: 24,
+        options: paymentModeOptions.value,
+        description: tableMode
+          ? details.value.paymentMode === 'ratio'
+            ? '填写应付比例，自动计算金额'
+            : '填写应付金额，自动计算比例'
+          : '',
+        props: tableMode
+          ? { activeValue: 'ratio', inactiveValue: 'amount', 'aria-label': '按比例编制付款计划' }
+          : { optionType: 'button' }
+      },
+      ...(tableMode
+        ? [{ key: 'paymentTable', label: '', type: 'paymentPlanTable', span: 24 }]
+        : paymentPlans.value.flatMap((_plan, index): FormItem[] => [
+            {
+              key: `paymentPlans_${index}`,
+              label: `第 ${index + 1} 期付款`,
+              type: 'divider',
+              span: 24
+            },
+            {
+              key: `paymentPlans.${index}.dueDate`,
+              label: '到期日期',
+              type: 'date',
+              props: { type: 'date', valueFormat: 'YYYY-MM-DD', class: 'w-full!' }
+            },
+            {
+              key: `paymentPlans.${index}.ratio`,
+              label: '应付比例（%）',
+              type: 'number',
+              props: {
+                min: 0,
+                max: 100,
+                precision: 2,
+                controls: false,
+                disabled: details.value.paymentMode !== 'ratio',
+                class: 'w-full!',
+                'aria-label': '应付比例'
+              }
+            },
+            {
+              key: `paymentPlans.${index}.amount`,
+              label: '应付金额（元）',
+              type: 'number',
+              props: {
+                min: 0,
+                precision: 2,
+                controls: false,
+                disabled: details.value.paymentMode === 'ratio',
+                class: 'w-full!',
+                'aria-label': '应付金额'
+              }
+            },
+
+            { key: `paymentPlans.${index}.isAdvance`, label: '预付', type: 'checkbox' },
+            {
+              key: `paymentPlans.${index}.remark`,
+              label: '计划备注',
+              type: 'input',
+              span: 24,
+              props: { placeholder: '计划备注' }
+            }
+          ]))
+    ]
+  })
+  const deliveryFormItems = computed<FormItem[]>(() =>
+    deliveryPlans.value.flatMap((_plan, index): FormItem[] => [
+      { key: `deliveryPlans_${index}`, label: `第 ${index + 1} 期交货`, type: 'divider', span: 24 },
+      {
+        key: `deliveryPlans.${index}.plannedDate`,
+        label: '计划交货日期',
+        type: 'date',
+        props: { type: 'date', valueFormat: 'YYYY-MM-DD', class: 'w-full!' }
+      },
+      {
+        key: `deliveryPlans.${index}.quantity`,
+        label: '计划交货数量',
+        type: 'number',
+        props: { min: 0.001, precision: 3, controls: false, class: 'w-full!' }
+      },
+      {
+        key: `deliveryPlans.${index}.plannedBaseQuantity`,
+        label: '计划交货基本数量',
+        type: 'number',
+        props: { min: 0, precision: 3, controls: false, class: 'w-full!' }
+      },
+      {
+        key: `deliveryPlans.${index}.location`,
+        label: '交货地点',
+        type: 'input',
+        props: { placeholder: '交货地点' }
+      },
+      {
+        key: `deliveryPlans.${index}.address`,
+        label: '交货地址',
+        type: 'input',
+        span: 12,
+        props: { placeholder: '交货地址' }
+      },
+      {
+        key: `deliveryPlans.${index}.remark`,
+        label: '备注',
+        type: 'input',
+        span: 12,
+        props: { placeholder: '备注' }
+      }
+    ])
+  )
+  const clauseFormItems = computed<FormItem[]>(() =>
+    clauses.value.flatMap((_clause, index): FormItem[] => [
+      { key: `clauses_${index}`, label: `第 ${index + 1} 条`, type: 'divider', span: 24 },
+      {
+        key: `clauses.${index}.title`,
+        label: '合同条款',
+        type: 'select',
+        options: clauseOptions.value,
+        props: {
+          filterable: false,
+          clearable: false,
+          placeholder: '选择条款',
+          'aria-label': `第 ${index + 1} 条合同条款`
+        }
+      },
+      {
+        key: `clauses.${index}.content`,
+        label: '条款内容',
+        type: 'textarea',
+        props: { rows: 3, maxlength: 2000, showWordLimit: true, placeholder: '填写条款内容' }
+      }
+    ])
+  )
+
   const detailItems = computed<FormItem[]>(() =>
-    config.value.fields.map((field): FormItem => ({
-      label: field.label,
-      key: field.key,
-      type: field.key === 'ownerId' ? 'slot' : field.type,
-      span: field.span ?? 12,
-      props:
-        field.type === 'date'
-          ? { type: 'date', valueFormat: 'YYYY-MM-DD', class: 'w-full!' }
-          : field.type === 'select'
-            ? field.key === 'contractStatus'
-              ? { options: userStore.getDictMap?.scmPurchaseContractStatus ?? [], disabled: true }
-              : field.key === 'ownerType'
-                ? { options: userStore.getDictMap?.mdmBusinessOwnerType ?? [] }
-                : field.key === 'constructionNo'
-                  ? {
-                      options: projectSections.value
-                        .filter((section) => section.projectId === header.value.projectId)
-                        .map((section) => ({
-                          label: `${section.constructionNo} · ${section.sectionName}`,
-                          value: section.constructionNo,
-                          disabled: section.status !== 'active'
-                        })),
-                      clearable: true,
-                      filterable: true,
-                      allowCreate: true,
-                      defaultFirstOption: true,
-                      placeholder: header.value.projectId
-                        ? '选择或填写施工号（可选）'
-                        : '可填写施工号'
-                    }
-                  : {
-                      options: userStore.getDictMap?.scmContractEffectiveness ?? [],
-                      disabled: true
-                    }
-            : { maxlength: field.span === 24 ? 500 : 120 }
-    }))
+    config.value.fields.map((field): FormItem => {
+      const employeeKey = field.key
+      if (employeeKey === 'buyer' || employeeKey === 'applicant' || employeeKey === 'keeper')
+        return {
+          key: employeeKey,
+          label: field.label,
+          type: 'employeeSelect',
+          span: field.span ?? 12,
+          props: {
+            tenantId: header.value.tenantId,
+            selectedData: selectedEmployees[employeeKey],
+            'onUpdate:selectedData': (rows: EmployeeIntegrationItem[]) => {
+              selectedEmployees[employeeKey] = rows
+            },
+            placeholder:
+              employeeKey === 'buyer'
+                ? '选择采购员'
+                : employeeKey === 'applicant'
+                  ? '选择申请人'
+                  : '选择库管员',
+            onChange: (_value: string | string[] | undefined, rows: EmployeeIntegrationItem[]) =>
+              setEmployeeName(employeeKey, rows)
+          }
+        }
+      if (field.key === 'ownerId') {
+        const supplier = details.value.ownerType === 'supplier'
+        const selectable = supplier || details.value.ownerType === 'customer'
+        return {
+          key: field.key,
+          label: field.label,
+          type: selectable ? 'dataSelect' : 'text',
+          span: field.span ?? 12,
+          props: selectable
+            ? {
+                mode: 'table',
+                multiple: false,
+                showSelectedPanel: false,
+                showPagination: false,
+                data: supplier ? suppliers.value : customers.value,
+                columns: supplier ? supplierPickerColumns : customerPickerColumns,
+                rowKey: 'id',
+                labelKey: supplier ? supplierPickerLabel : customerPickerLabel,
+                title: supplier ? '参选货主供应商' : '参选货主客户',
+                searchPlaceholder: supplier ? '搜索供应商编码或名称' : '搜索客户编码或名称',
+                disabled: !header.value.tenantId
+              }
+            : { formatter: () => '自有无需选择货主' }
+        }
+      }
+      return {
+        label: field.label,
+        key: field.key,
+        type: field.type,
+        span: field.span ?? 12,
+        props:
+          field.type === 'date'
+            ? { type: 'date', valueFormat: 'YYYY-MM-DD', class: 'w-full!' }
+            : field.type === 'select'
+              ? field.key === 'contractStatus'
+                ? { options: userStore.getDictMap?.scmPurchaseContractStatus ?? [], disabled: true }
+                : field.key === 'ownerType'
+                  ? { options: userStore.getDictMap?.mdmBusinessOwnerType ?? [] }
+                  : field.key === 'constructionNo'
+                    ? {
+                        options: projectSections.value
+                          .filter((section) => section.projectId === header.value.projectId)
+                          .map((section) => ({
+                            label: `${section.constructionNo} · ${section.sectionName}`,
+                            value: section.constructionNo,
+                            disabled: section.status !== 'active'
+                          })),
+                        clearable: true,
+                        filterable: true,
+                        allowCreate: true,
+                        defaultFirstOption: true,
+                        placeholder: header.value.projectId
+                          ? '选择或填写施工号（可选）'
+                          : '可填写施工号'
+                      }
+                    : {
+                        options: userStore.getDictMap?.scmContractEffectiveness ?? [],
+                        disabled: true
+                      }
+              : { maxlength: field.span === 24 ? 500 : 120 }
+      }
+    })
   )
 
   async function loadReferences(tenantId: string): Promise<boolean> {

@@ -1,1 +1,0 @@
-import{qi as e,ta as t,ya as n}from"./sys-CK91BTxC.js";import{t as r}from"./purchase-workspace-LVrXpsJ-.js";var i=t({name:`ScmPurchaseOrder`,__name:`index`,setup(t){return(t,i)=>(n(),e(r,{kind:`purchase_order`,"prepayment-permission":`ScmPurchaseOrder:Push`}))}});export{i as default};

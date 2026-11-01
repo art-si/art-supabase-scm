@@ -31,16 +31,6 @@
           :gutter="20"
           label-width="110px"
         >
-          <template #imageUrls>
-            <ArtUploadImage
-              v-model="form.imageUrls"
-              :resource-tenant-id="quotation?.tenantId ?? ''"
-              multiple
-              :limit="5"
-              :size="92"
-              tip="支持上传或从资源库选择，最多 5 张"
-            />
-          </template>
         </ArtForm>
       </ArtSectionCard>
     </div>
@@ -64,7 +54,6 @@
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
-  import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
   import ArtTable from '@/components/core/tables/art-table/index.vue'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
@@ -241,7 +230,19 @@
         placeholder: '请选择编码策略'
       }
     },
-    { label: '图片', key: 'imageUrls', type: 'slot', span: 24 }
+    {
+      label: '图片',
+      key: 'imageUrls',
+      type: 'uploadImage',
+      span: 24,
+      props: {
+        resourceTenantId: quotation.value?.tenantId ?? '',
+        multiple: true,
+        limit: 5,
+        size: 92,
+        tip: '支持上传或从资源库选择，最多 5 张'
+      }
+    }
   ])
   const rules: FormRules<ScmQuotationMaterialConfig> = {
     materialTypeId: [{ required: true, message: '请选择物料类型', trigger: 'change' }],

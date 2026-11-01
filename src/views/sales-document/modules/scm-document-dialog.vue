@@ -25,21 +25,6 @@
           :gutter="20"
           label-width="112px"
         >
-          <template #projectId>
-            <ArtTableSingleSelect
-              v-model="header.projectId"
-              :data="projectOptions"
-              :columns="projectPickerColumns"
-              row-key="id"
-              :label-key="projectPickerLabel"
-              title="参选项目"
-              search-placeholder="搜索项目编号或名称"
-              :disabled="!header.tenantId || (kind !== 'loading' && Boolean(header.sourceId))"
-              empty-text="暂无可选项目"
-              empty-description="请先在 MDM 项目列表维护项目。"
-              dialog-width="xl"
-            />
-          </template>
         </ArtForm>
       </ArtSectionCard>
 
@@ -58,39 +43,6 @@
           :gutter="20"
           label-width="112px"
         >
-          <template #salespersonId>
-            <ArtEmployeeSelect
-              v-model="details.salespersonId"
-              v-model:selected-data="selectedSalesperson"
-              :tenant-id="header.tenantId"
-              :api-fn="fetchScmSalespersonOptions"
-              :display-fields="['organization', 'jobTitle', 'employmentStatus']"
-              placeholder="从员工花名册参选销售员"
-              @change="updateSalesperson"
-            />
-          </template>
-          <template #contractTotalAmount>
-            <div class="flex min-w-0 items-center gap-2">
-              <ElInputNumber
-                :model-value="details.contractTotalAmount ?? contractCalculatedTotal"
-                :min="0"
-                :precision="2"
-                :controls="false"
-                class="min-w-0 flex-1!"
-                aria-label="合同总金额"
-                @update:model-value="
-                  (amount) => (details.contractTotalAmount = amount ?? undefined)
-                "
-              />
-              <ElButton
-                v-if="details.contractTotalAmount !== undefined"
-                text
-                type="primary"
-                @click="details.contractTotalAmount = undefined"
-                >按明细重算</ElButton
-              >
-            </div>
-          </template>
         </ArtForm>
       </ArtSectionCard>
 
@@ -272,95 +224,34 @@
                 添加计划
               </ElButton>
             </template>
-            <div v-if="kind === 'sales_contract' || kind === 'sales_order'" class="min-w-0">
-              <div class="mb-3 flex items-center gap-3 text-sm text-[var(--art-gray-700)]">
-                <span>按比例（%）</span>
-                <ElSwitch
-                  :model-value="details.paymentPlanMode === 'ratio'"
-                  aria-label="按比例编制收款计划"
-                  @update:model-value="
-                    (enabled) => (details.paymentPlanMode = enabled === true ? 'ratio' : 'amount')
-                  "
-                />
-                <span class="text-xs text-[var(--art-gray-600)]">{{
-                  details.paymentPlanMode === 'ratio'
-                    ? '填写应收比例，自动计算金额'
-                    : '填写应收金额，自动计算比例'
-                }}</span>
-              </div>
-              <ArtTable
-                :data="paymentPlans"
-                :columns="paymentColumns"
-                :pagination="false"
-                row-key="id"
-                border
-                :max-height="380"
-                :scrollbar-always-on="false"
-                class="w-full!"
-                empty-text="暂无收款计划"
-                empty-description="点击“添加计划”设置每期应收。"
-              />
-            </div>
-            <div v-else class="flex flex-col gap-3">
-              <div
-                v-for="(plan, index) in paymentPlans"
-                :key="plan.id"
-                class="grid min-w-0 grid-cols-1 items-end gap-3 rounded-lg border border-[var(--el-border-color-light)] p-3 sm:grid-cols-2 xl:grid-cols-4"
-              >
-                <label class="flex flex-col gap-1 text-xs text-[var(--art-gray-600)]">
-                  到期日期
-                  <ElDatePicker
-                    v-model="plan.dueDate"
-                    type="date"
-                    value-format="YYYY-MM-DD"
-                    class="w-full!"
-                  />
-                </label>
-                <label class="flex flex-col gap-1 text-xs text-[var(--art-gray-600)]">
-                  应收比例（%）
-                  <ElInputNumber
-                    v-model="plan.ratio"
-                    :min="0"
-                    :max="100"
-                    :precision="2"
-                    :controls="false"
-                    class="w-full!"
-                    :disabled="details.paymentPlanMode === 'amount'"
-                  />
-                </label>
-                <label class="flex flex-col gap-1 text-xs text-[var(--art-gray-600)]">
-                  应收金额（元）
-                  <ElInputNumber
-                    v-model="plan.amount"
-                    :min="0"
-                    :precision="2"
-                    :controls="false"
-                    class="w-full!"
-                    :disabled="details.paymentPlanMode === 'ratio'"
-                  />
-                </label>
-                <label class="flex flex-col gap-1 text-xs text-[var(--art-gray-600)]">
-                  预收允超比例（%）
-                  <ElInputNumber
-                    v-model="plan.excessRatio"
-                    :min="0"
-                    :max="100"
-                    :precision="2"
-                    :controls="false"
-                    class="w-full!"
-                  />
-                </label>
-                <label class="flex flex-col gap-1 text-xs text-[var(--art-gray-600)]">
-                  是否预收
-                  <ElSwitch v-model="plan.isAdvance" />
-                </label>
-                <label class="flex flex-col gap-1 text-xs text-[var(--art-gray-600)] xl:col-span-2">
-                  备注
-                  <ElInput v-model="plan.remark" maxlength="300" />
-                </label>
-                <ElButton type="danger" text @click="paymentPlans.splice(index, 1)">移除</ElButton>
-              </div>
-            </div>
+            <ArtForm
+              :model-value="planForm"
+              :items="paymentFormItems"
+              :span="6"
+              :gutter="16"
+              root-class="p-0! md:p-0!"
+              ><template #paymentTable
+                ><ArtTable
+                  :data="paymentPlans"
+                  :columns="paymentColumns"
+                  :pagination="false"
+                  row-key="id"
+                  border
+                  :max-height="380"
+                  :scrollbar-always-on="false"
+                  class="w-full!"
+                  empty-text="暂无收款计划"
+                  empty-description="点击“添加计划”设置每期应收。" /></template
+              ><template
+                v-for="(entry, index) in paymentPlans"
+                :key="entry.id"
+                #[`paymentPlans_${index}Actions`]
+                ><ArtIconButton
+                  icon="ri:delete-bin-line"
+                  label="移除收款计划"
+                  tone="danger"
+                  @click="paymentPlans.splice(index, 1)" /></template
+            ></ArtForm>
           </ArtSectionCard>
         </ElTabPane>
 
@@ -390,62 +281,23 @@
               class="w-full!"
               empty-text="暂无发货计划"
               empty-description="点击“添加计划”安排要货日期与发货数量。"
-            />
-            <div v-else class="flex flex-col gap-3">
-              <div
-                v-for="(plan, index) in deliveryPlans"
-                :key="plan.id"
-                class="grid min-w-0 grid-cols-1 items-end gap-3 rounded-lg border border-[var(--el-border-color-light)] p-3 sm:grid-cols-2 xl:grid-cols-4"
-              >
-                <label class="flex flex-col gap-1 text-xs text-[var(--art-gray-600)]">
-                  收货地点
-                  <ElInput v-model="plan.location" maxlength="100" />
-                </label>
-                <label class="flex flex-col gap-1 text-xs text-[var(--art-gray-600)] xl:col-span-2">
-                  收货地址
-                  <ElInput v-model="plan.address" maxlength="200" />
-                </label>
-                <label class="flex flex-col gap-1 text-xs text-[var(--art-gray-600)]">
-                  要货日期
-                  <ElDatePicker
-                    v-model="plan.needDate"
-                    type="date"
-                    value-format="YYYY-MM-DD"
-                    class="w-full!"
-                  />
-                </label>
-                <label class="flex flex-col gap-1 text-xs text-[var(--art-gray-600)]">
-                  运输提前期（天）
-                  <ElInputNumber
-                    v-model="plan.leadDays"
-                    :min="0"
-                    :max="365"
-                    :controls="false"
-                    class="w-full!"
-                  />
-                </label>
-                <label class="flex flex-col gap-1 text-xs text-[var(--art-gray-600)]">
-                  计划发货日期
-                  <ElDatePicker
-                    v-model="plan.plannedDate"
-                    type="date"
-                    value-format="YYYY-MM-DD"
-                    class="w-full!"
-                  />
-                </label>
-                <label class="flex flex-col gap-1 text-xs text-[var(--art-gray-600)]">
-                  计划数量
-                  <ElInputNumber
-                    v-model="plan.quantity"
-                    :min="0.001"
-                    :precision="3"
-                    :controls="false"
-                    class="w-full!"
-                  />
-                </label>
-                <ElButton type="danger" text @click="deliveryPlans.splice(index, 1)">移除</ElButton>
-              </div>
-            </div>
+            /><ArtForm
+              v-else
+              :model-value="planForm"
+              :items="deliveryFormItems"
+              :span="6"
+              :gutter="16"
+              root-class="p-0! md:p-0!"
+              ><template
+                v-for="(entry, index) in deliveryPlans"
+                :key="entry.id"
+                #[`deliveryPlans_${index}Actions`]
+                ><ArtIconButton
+                  icon="ri:delete-bin-line"
+                  label="移除发货计划"
+                  tone="danger"
+                  @click="deliveryPlans.splice(index, 1)" /></template
+            ></ArtForm>
           </ArtSectionCard>
         </ElTabPane>
 
@@ -463,47 +315,22 @@
                 添加条款
               </ElButton>
             </template>
-            <div class="flex flex-col gap-3">
-              <div
-                v-for="(clause, index) in clauses"
-                :key="clause.id"
-                class="rounded-lg border border-[var(--el-border-color-light)] p-3"
-              >
-                <div class="mb-2 flex items-center justify-between">
-                  <strong class="text-sm">第 {{ index + 1 }} 条</strong>
-                  <ElButton type="danger" text @click="clauses.splice(index, 1)">移除</ElButton>
-                </div>
-                <div class="flex min-w-0 flex-col gap-2">
-                  <label class="flex flex-col gap-1 text-xs text-[var(--art-gray-700)]">
-                    合同条款
-                    <ElSelect
-                      v-model="clause.title"
-                      filterable
-                      placeholder="参选合同条款"
-                      class="w-full!"
-                      :aria-label="`第 ${index + 1} 条合同条款`"
-                    >
-                      <ElOption
-                        v-for="option in clauseOptions"
-                        :key="option.value"
-                        :label="option.label"
-                        :value="option.value"
-                      />
-                    </ElSelect>
-                  </label>
-                  <label class="flex flex-col gap-1 text-xs text-[var(--art-gray-700)]">
-                    条款内容
-                    <ElInput
-                      v-model="clause.content"
-                      type="textarea"
-                      :rows="3"
-                      maxlength="4000"
-                      placeholder="条款内容"
-                    />
-                  </label>
-                </div>
-              </div>
-            </div>
+            <ArtForm
+              :model-value="planForm"
+              :items="clauseFormItems"
+              :span="24"
+              :gutter="16"
+              root-class="p-0! md:p-0!"
+              ><template
+                v-for="(entry, index) in clauses"
+                :key="entry.id"
+                #[`clauses_${index}Actions`]
+                ><ArtIconButton
+                  icon="ri:delete-bin-line"
+                  label="移除合同条款"
+                  tone="danger"
+                  @click="clauses.splice(index, 1)" /></template
+            ></ArtForm>
           </ArtSectionCard>
         </ElTabPane>
       </ElTabs>
@@ -595,6 +422,7 @@
 </template>
 
 <script setup lang="tsx">
+  import { ElButton } from 'element-plus'
   import { useUnitDisplayNames } from '@/hooks/core/useUnitDisplayNames'
   import { cloneDeep, omit } from 'lodash-es'
   import dayjs from 'dayjs'
@@ -612,8 +440,6 @@
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import ArtTableMultipleSelect from '@/components/core/forms/art-data-select/table-multiple.vue'
-  import ArtTableSingleSelect from '@/components/core/forms/art-data-select/table-single.vue'
-  import ArtEmployeeSelect from '@/components/business/art-employee-select/index.vue'
   import type { EmployeeIntegrationItem } from '@/api/integration/employees'
   import type {
     ArtDataSelectExpose,
@@ -1033,25 +859,40 @@
     {
       label: '项目名称',
       key: 'projectId',
-      type: [
-        'sales_quotation',
-        'sales_contract',
-        'sales_order',
-        'shipping_notice',
-        'loading'
-      ].includes(kind.value)
-        ? 'slot'
-        : 'select',
+      type: 'dataSelect',
       props: {
-        options: projectOptions.value.map((item) => ({
-          label: `${item.projectName}（${item.projectCode}）`,
-          value: item.id
-        })),
-        filterable: true,
-        loading: referencesLoading.value,
-        disabled: !header.value.tenantId || Boolean(header.value.sourceId),
-        clearable: !config.value.projectRequired,
-        placeholder: config.value.projectRequired ? '请选择项目' : '选择既有项目，或在下方自动创建'
+        ...{
+          options: projectOptions.value.map((item) => ({
+            label: `${item.projectName}（${item.projectCode}）`,
+            value: item.id
+          })),
+          filterable: true,
+          loading: referencesLoading.value,
+          disabled: !header.value.tenantId || Boolean(header.value.sourceId),
+          clearable: !config.value.projectRequired,
+          placeholder: config.value.projectRequired
+            ? '请选择项目'
+            : '选择既有项目，或在下方自动创建'
+        },
+        mode: 'table',
+        multiple: false,
+        modelValue: header.value.projectId,
+        'onUpdate:modelValue': (value: typeof header.value.projectId) => {
+          header.value.projectId = value
+        },
+        data: projectOptions.value,
+        columns: projectPickerColumns,
+        rowKey: 'id',
+        labelKey: projectPickerLabel,
+        title: '参选项目',
+        searchPlaceholder: '搜索项目编号或名称',
+        disabled:
+          !header.value.tenantId || (kind.value !== 'loading' && Boolean(header.value.sourceId)),
+        emptyText: '暂无可选项目',
+        emptyDescription: '请先在 MDM 项目列表维护项目。',
+        dialogWidth: 'xl',
+        showSelectedPanel: false,
+        showPagination: false
       }
     },
     {
@@ -1128,6 +969,156 @@
     }
   ])
 
+  const planForm = reactive({ details, paymentPlans, deliveryPlans, clauses })
+  const paymentFormItems = computed<FormItem[]>(() => {
+    const tableMode = kind.value === 'sales_contract' || kind.value === 'sales_order'
+    return [
+      ...(tableMode
+        ? [
+            {
+              key: 'details.paymentPlanMode',
+              label: '收款计划方式',
+              type: 'switch',
+              span: 24,
+              description: tableMode
+                ? details.value.paymentPlanMode === 'ratio'
+                  ? '填写应收比例，自动计算金额'
+                  : '填写应收金额，自动计算比例'
+                : '',
+              props: {
+                activeValue: 'ratio',
+                inactiveValue: 'amount',
+                'aria-label': '按比例编制收款计划'
+              }
+            }
+          ]
+        : []),
+      ...(tableMode
+        ? [{ key: 'paymentTable', label: '', type: 'paymentPlanTable', span: 24 }]
+        : paymentPlans.value.flatMap((_plan, index): FormItem[] => [
+            {
+              key: `paymentPlans_${index}`,
+              label: `第 ${index + 1} 期收款`,
+              type: 'divider',
+              span: 24
+            },
+            {
+              key: `paymentPlans.${index}.dueDate`,
+              label: '到期日期',
+              type: 'date',
+              props: { type: 'date', valueFormat: 'YYYY-MM-DD', class: 'w-full!' }
+            },
+            {
+              key: `paymentPlans.${index}.ratio`,
+              label: '应收比例（%）',
+              type: 'number',
+              props: {
+                min: 0,
+                max: 100,
+                precision: 2,
+                controls: false,
+                disabled: details.value.paymentPlanMode === 'amount',
+                class: 'w-full!',
+                'aria-label': '应收比例'
+              }
+            },
+            {
+              key: `paymentPlans.${index}.amount`,
+              label: '应收金额（元）',
+              type: 'number',
+              props: {
+                min: 0,
+                precision: 2,
+                controls: false,
+                disabled: details.value.paymentPlanMode === 'ratio',
+                class: 'w-full!',
+                'aria-label': '应收金额'
+              }
+            },
+            {
+              key: `paymentPlans.${index}.excessRatio`,
+              label: '预收允超比例（%）',
+              type: 'number',
+              props: { min: 0, max: 100, precision: 2, controls: false, class: 'w-full!' }
+            },
+            { key: `paymentPlans.${index}.isAdvance`, label: '是否预收', type: 'switch' },
+            {
+              key: `paymentPlans.${index}.remark`,
+              label: '计划备注',
+              type: 'input',
+              span: 24,
+              props: { maxlength: 300 }
+            }
+          ]))
+    ]
+  })
+  const deliveryFormItems = computed<FormItem[]>(() =>
+    deliveryPlans.value.flatMap((_plan, index): FormItem[] => [
+      { key: `deliveryPlans_${index}`, label: `第 ${index + 1} 期发货`, type: 'divider', span: 24 },
+
+      {
+        key: `deliveryPlans.${index}.location`,
+        label: '收货地点',
+        type: 'input',
+        props: { maxlength: 100 }
+      },
+      {
+        key: `deliveryPlans.${index}.address`,
+        label: '收货地址',
+        type: 'input',
+        span: 12,
+        props: { maxlength: 200 }
+      },
+      {
+        key: `deliveryPlans.${index}.needDate`,
+        label: '要货日期',
+        type: 'date',
+        props: { type: 'date', valueFormat: 'YYYY-MM-DD', class: 'w-full!' }
+      },
+      {
+        key: `deliveryPlans.${index}.leadDays`,
+        label: '运输提前期（天）',
+        type: 'number',
+        props: { min: 0, max: 365, controls: false, class: 'w-full!' }
+      },
+      {
+        key: `deliveryPlans.${index}.plannedDate`,
+        label: '计划发货日期',
+        type: 'date',
+        props: { type: 'date', valueFormat: 'YYYY-MM-DD', class: 'w-full!' }
+      },
+      {
+        key: `deliveryPlans.${index}.quantity`,
+        label: '计划数量',
+        type: 'number',
+        props: { min: 0.001, precision: 3, controls: false, class: 'w-full!' }
+      }
+    ])
+  )
+  const clauseFormItems = computed<FormItem[]>(() =>
+    clauses.value.flatMap((_clause, index): FormItem[] => [
+      { key: `clauses_${index}`, label: `第 ${index + 1} 条`, type: 'divider', span: 24 },
+      {
+        key: `clauses.${index}.title`,
+        label: '合同条款',
+        type: 'select',
+        options: clauseOptions.value,
+        props: {
+          filterable: true,
+          clearable: false,
+          placeholder: '参选合同条款',
+          'aria-label': `第 ${index + 1} 条合同条款`
+        }
+      },
+      {
+        key: `clauses.${index}.content`,
+        label: '条款内容',
+        type: 'textarea',
+        props: { rows: 3, maxlength: 4000, showWordLimit: false, placeholder: '条款内容' }
+      }
+    ])
+  )
+
   const detailItems = computed<FormItem[]>(() => [
     ...(config.value.usePaymentPlans &&
     kind.value !== 'sales_contract' &&
@@ -1148,45 +1139,89 @@
     ...activeDetailFields.value.map((field): FormItem => ({
       label: field.label,
       key: field.key,
-      type: field.type,
+      type:
+        field.key === 'contractTotalAmount'
+          ? 'number'
+          : field.key === 'salespersonId'
+            ? 'employeeSelect'
+            : field.type,
+      description:
+        field.key === 'contractTotalAmount' && details.value.contractTotalAmount !== undefined
+          ? () => (
+              <ElButton
+                text
+                type="primary"
+                onClick={() => {
+                  details.value.contractTotalAmount = undefined
+                }}
+              >
+                按明细重算
+              </ElButton>
+            )
+          : undefined,
       span: field.span ?? 12,
       props:
-        field.key === 'productName' && kind.value === 'sales_quotation'
+        field.key === 'contractTotalAmount'
           ? {
-              options: materialOptions.value.map((item) => ({
-                label: item.materialDescription,
-                value: item.materialDescription
-              })),
-              filterable: true,
-              clearable: true,
-              placeholder: '从物料描述中选填产品名称'
-            }
-          : field.type === 'date'
-            ? {
-                type: 'date',
-                valueFormat: 'YYYY-MM-DD',
-                class: 'w-full!',
-                clearable: true,
-                disabled: kind.value === 'project_quotation'
+              modelValue: details.value.contractTotalAmount ?? contractCalculatedTotal.value,
+              min: 0,
+              precision: 2,
+              controls: false,
+              class: 'w-full!',
+              'aria-label': '合同总金额',
+              'onUpdate:modelValue': (amount: number | null | undefined) => {
+                details.value.contractTotalAmount = amount ?? undefined
               }
-            : field.type === 'number'
+            }
+          : field.key === 'salespersonId'
+            ? {
+                tenantId: header.value.tenantId,
+                apiFn: fetchScmSalespersonOptions,
+                displayFields: ['organization', 'jobTitle', 'employmentStatus'],
+                placeholder: '从员工花名册参选销售员',
+                selectedData: selectedSalesperson.value,
+                'onUpdate:selectedData': (rows: EmployeeIntegrationItem[]) => {
+                  selectedSalesperson.value = rows
+                },
+                onChange: updateSalesperson
+              }
+            : field.key === 'productName' && kind.value === 'sales_quotation'
               ? {
-                  min: 0,
-                  precision: 2,
-                  controls: false,
-                  class: 'w-full!',
-                  disabled: kind.value === 'project_quotation'
+                  options: materialOptions.value.map((item) => ({
+                    label: item.materialDescription,
+                    value: item.materialDescription
+                  })),
+                  filterable: true,
+                  clearable: true,
+                  placeholder: '从物料描述中选填产品名称'
                 }
-              : field.type === 'select'
+              : field.type === 'date'
                 ? {
-                    options: userStore.getDictMap?.[field.dictionary || ''] ?? [],
+                    type: 'date',
+                    valueFormat: 'YYYY-MM-DD',
+                    class: 'w-full!',
                     clearable: true,
-                    disabled: kind.value === 'project_quotation' || field.key === 'salesDepartment'
-                  }
-                : {
-                    maxlength: field.span === 24 ? 500 : 120,
                     disabled: kind.value === 'project_quotation'
                   }
+                : field.type === 'number'
+                  ? {
+                      min: 0,
+                      precision: 2,
+                      controls: false,
+                      class: 'w-full!',
+                      disabled: kind.value === 'project_quotation'
+                    }
+                  : field.type === 'select'
+                    ? {
+                        options: userStore.getDictMap?.[field.dictionary || ''] ?? [],
+                        clearable: true,
+                        disabled:
+                          kind.value === 'project_quotation' || field.key === 'salesDepartment'
+                      }
+                    : {
+                        maxlength: field.span === 24 ? 500 : 120,
+                        disabled: kind.value === 'project_quotation'
+                      }
     }))
   ])
 

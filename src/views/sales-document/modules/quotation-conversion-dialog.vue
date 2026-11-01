@@ -10,16 +10,16 @@
         title="选择目标单据"
         subtitle="系统复制报价的项目、客户、物料、数量与价格，并保留转单审计关系。"
       >
-        <ElSegmented
-          v-model="targetKind"
-          :options="targetOptions"
-          class="max-w-full"
-          aria-label="报价转单目标"
+        <ArtForm
+          :model-value="conversionForm"
+          :items="conversionFormItems"
+          :span="24"
+          root-class="p-0! md:p-0!"
         />
       </ArtSectionCard>
 
       <ArtSectionCard
-        v-if="targetKind === 'purchase_order'"
+        v-if="targetKind === 'purchase_order' && (loadError || (!loading && !suppliers.length))"
         title="采购信息"
         subtitle="采购订单必须指定供应商；采购申请可在后续询比价后再确定供应商。"
         :error="loadError"
@@ -28,17 +28,6 @@
         empty-description="请先维护报价所属租户的供应商资料。"
         @retry="retryLoad"
       >
-        <label class="flex min-w-0 flex-col gap-1 text-sm text-[var(--art-gray-700)]">
-          供应商
-          <ElSelect v-model="supplierId" filterable placeholder="请选择采购订单供应商">
-            <ElOption
-              v-for="supplier in suppliers"
-              :key="supplier.id"
-              :label="`${supplier.supplierName} · ${supplier.supplierCode}`"
-              :value="supplier.id"
-            />
-          </ElSelect>
-        </label>
       </ArtSectionCard>
 
       <ArtSectionCard
@@ -71,7 +60,8 @@
   import { ElMessage, ElInputNumber } from 'element-plus'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
-  import { computed, ref, watch } from 'vue'
+  import { computed, reactive, ref, watch } from 'vue'
+  import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import type { ColumnOption } from '@/types'
   import ArtTable, { type ArtTableExpose } from '@/components/core/tables/art-table/index.vue'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
@@ -111,6 +101,27 @@
   const suppliers = computed(() => supplierOptions.value ?? [])
   const targetKind = ref<ScmQuotationConversionTarget>('sales_order')
   const supplierId = ref('')
+  const conversionForm = reactive({ targetKind, supplierId })
+  const conversionFormItems = computed<FormItem[]>(() => [
+    {
+      key: 'targetKind',
+      label: '转单目标',
+      type: 'segment',
+      options: targetOptions.value,
+      props: { class: 'max-w-full', 'aria-label': '报价转单目标' }
+    },
+    {
+      key: 'supplierId',
+      label: '供应商',
+      type: 'select',
+      hidden: targetKind.value !== 'purchase_order',
+      options: suppliers.value.map((supplier) => ({
+        value: supplier.id,
+        label: `${supplier.supplierName} · ${supplier.supplierCode}`
+      })),
+      props: { filterable: true, clearable: false, placeholder: '请选择采购订单供应商' }
+    }
+  ])
   type ConversionLine = ScmDocumentLine & {
     convertedQuantity: number
     remainingQuantity: number

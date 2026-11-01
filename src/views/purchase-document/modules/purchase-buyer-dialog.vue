@@ -1,13 +1,6 @@
 <template>
   <ArtDialog ref="dialogRef" size="sm">
-    <ArtForm ref="formRef" v-model="form.data" :items="form.items" :rules="form.rules" :span="24">
-      <template #buyer>
-        <ArtEmployeeSelect
-          v-model="form.data.buyer"
-          :tenant-id="form.tenantId"
-          placeholder="选择采购员"
-        />
-      </template>
+    <ArtForm ref="formRef" v-model="form.data" :items="buyerItems" :rules="form.rules" :span="24">
     </ArtForm>
   </ArtDialog>
 </template>
@@ -15,7 +8,6 @@
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm from '@/components/core/forms/art-form/index.vue'
-  import ArtEmployeeSelect from '@/components/business/art-employee-select/index.vue'
   import { batchScmPurchaseDocuments, type ScmPurchaseSelection } from '@scm/api'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import { ElMessage } from 'element-plus'
@@ -30,9 +22,16 @@
     data: { buyer: '' },
     tenantId: '',
     selections: [] as ScmPurchaseSelection[],
-    items: [{ key: 'buyer', label: '采购员', type: 'slot' }] as FormItem[],
     rules: { buyer: [{ required: true, message: '请选择采购员', trigger: 'change' }] }
   })
+  const buyerItems = computed<FormItem[]>(() => [
+    {
+      key: 'buyer',
+      label: '采购员',
+      type: 'employeeSelect',
+      props: { tenantId: form.tenantId, placeholder: '选择采购员' }
+    }
+  ])
   async function handleOpen(selections: ScmPurchaseSelection[], tenantId: string): Promise<void> {
     if (!hasAuth('ScmPurchaseRequest:Edit')) return
     Object.assign(form, { data: { buyer: '' }, tenantId, selections })

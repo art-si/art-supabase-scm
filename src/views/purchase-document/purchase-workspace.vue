@@ -23,7 +23,6 @@
       </BusinessWorkspaceHeader>
       <ElAlert
         v-if="linkedDocumentError"
-        class="mb-4!"
         type="error"
         title="关联采购单据暂未打开"
         :closable="false"
