@@ -305,7 +305,7 @@
       key: 'status',
       label: '单据状态',
       value: (row: ScmSalesDocument) =>
-        userStore.getDictItemByValue('scmDocumentStatus', row.status)?.label || row.status
+        userStore.getDictLabelByValue('scmDocumentStatus', row.status, '未识别状态')
     },
     ...(record.value.kind === 'sales_contract'
       ? [

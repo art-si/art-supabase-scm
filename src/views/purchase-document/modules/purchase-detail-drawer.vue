@@ -295,7 +295,7 @@
       key: 'status',
       label: '单据状态',
       value: (row: ScmPurchaseDocument) =>
-        userStore.getDictItemByValue('scmPurchaseStatus', row.status)?.label || row.status
+        userStore.getDictLabelByValue('scmPurchaseStatus', row.status, '未识别状态')
     },
     {
       key: 'projectName',

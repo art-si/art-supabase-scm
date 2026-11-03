@@ -1493,7 +1493,7 @@
       customerName: row.customer?.customerName || '',
       documentDate: row.documentDate,
       deliveryDate: row.deliveryDate || '',
-      status: userStore.getDictItemByValue('scmDocumentStatus', row.status)?.label || row.status,
+      status: userStore.getDictLabelByValue('scmDocumentStatus', row.status, '未识别状态'),
       orderStatus:
         userStore.getDictItemByValue('scmSalesOrderStatus', row.orderStatus)?.label ||
         row.orderStatus ||

@@ -1460,7 +1460,10 @@
           icon="ri:delete-bin-line"
           label="移除费用"
           tone="danger"
-          onClick={() => fees.value.splice(fees.value.indexOf(row), 1)}
+          onClick={() => {
+            const index = fees.value.indexOf(row)
+            if (index >= 0) fees.value.splice(index, 1)
+          }}
         />
       )
     }
@@ -1610,7 +1613,10 @@
           icon="ri:delete-bin-line"
           label="移除收款计划"
           tone="danger"
-          onClick={() => paymentPlans.value.splice(paymentPlans.value.indexOf(row), 1)}
+          onClick={() => {
+            const index = paymentPlans.value.indexOf(row)
+            if (index >= 0) paymentPlans.value.splice(index, 1)
+          }}
         />
       )
     }
@@ -1729,7 +1735,10 @@
           icon="ri:delete-bin-line"
           label="移除发货计划"
           tone="danger"
-          onClick={() => deliveryPlans.value.splice(deliveryPlans.value.indexOf(row), 1)}
+          onClick={() => {
+            const index = deliveryPlans.value.indexOf(row)
+            if (index >= 0) deliveryPlans.value.splice(index, 1)
+          }}
         />
       )
     }

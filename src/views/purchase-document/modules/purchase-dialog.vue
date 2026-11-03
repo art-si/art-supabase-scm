@@ -1097,7 +1097,10 @@
           icon="ri:delete-bin-line"
           label="移除付款计划"
           tone="danger"
-          onClick={() => paymentPlans.value.splice(paymentPlans.value.indexOf(row), 1)}
+          onClick={() => {
+            const index = paymentPlans.value.indexOf(row)
+            if (index >= 0) paymentPlans.value.splice(index, 1)
+          }}
         />
       )
     }
@@ -1223,7 +1226,10 @@
           icon="ri:delete-bin-line"
           label="移除交货计划"
           tone="danger"
-          onClick={() => deliveryPlans.value.splice(deliveryPlans.value.indexOf(row), 1)}
+          onClick={() => {
+            const index = deliveryPlans.value.indexOf(row)
+            if (index >= 0) deliveryPlans.value.splice(index, 1)
+          }}
         />
       )
     }
@@ -1267,7 +1273,10 @@
           icon="ri:delete-bin-line"
           label="移除合同条款"
           tone="danger"
-          onClick={() => clauses.value.splice(clauses.value.indexOf(row), 1)}
+          onClick={() => {
+            const index = clauses.value.indexOf(row)
+            if (index >= 0) clauses.value.splice(index, 1)
+          }}
         />
       )
     }
@@ -1279,202 +1288,199 @@
       prop: 'extra',
       label: '',
       width: 48,
-      formatter: (row) => (
-        <div class="grid min-w-0 grid-cols-1 gap-3 p-4 text-xs sm:grid-cols-2 lg:grid-cols-4">
-          <label class="flex min-w-0 flex-col gap-1 text-[var(--art-gray-600)]">
-            需求日期
-            <ElDatePicker
-              v-model={row.needDate}
-              type="date"
-              value-format="YYYY-MM-DD"
-              class="w-full!"
-            />
-          </label>
-          {kind.value === 'purchase_order' && (
-            <>
-              <label class="flex min-w-0 flex-col gap-1 text-[var(--art-gray-600)]">
-                需求部门
-                <ElInput v-model={row.department} maxlength={120} placeholder="填写需求部门" />
-              </label>
-              <label class="flex min-w-0 flex-col gap-1 text-[var(--art-gray-600)]">
-                申请人
-                <ArtEmployeeSelect
-                  v-model={row.applicant}
-                  tenantId={header.value.tenantId}
-                  placeholder="参选员工"
-                  onChange={(_, rows) => {
-                    row.applicantName = rows[0]?.employeeName || ''
-                  }}
-                />
-              </label>
-            </>
-          )}
-          <label class="flex min-w-0 flex-col gap-1 text-[var(--art-gray-600)]">
-            辅助数量
-            <ElInputNumber
-              v-model={row.auxiliaryQuantity}
-              min={0}
-              precision={3}
-              controls={false}
-              disabled={kind.value === 'receipt_notice' || kind.value === 'purchase_order'}
-              class="w-full!"
-            />
-          </label>
-          <label class="flex min-w-0 flex-col gap-1 text-[var(--art-gray-600)]">
-            辅助单位
-            <ElInput
-              v-model={row.auxiliaryUnit}
-              maxlength={30}
-              placeholder="可选"
-              disabled={kind.value === 'receipt_notice' || kind.value === 'purchase_order'}
-            />
-          </label>
-          <label class="flex min-w-0 flex-col gap-1 text-[var(--art-gray-600)]">
-            辅助数量（2）
-            <ElInputNumber
-              v-model={row.auxiliaryQuantity2}
-              min={0}
-              precision={3}
-              controls={false}
-              disabled={kind.value === 'receipt_notice' || kind.value === 'purchase_order'}
-              class="w-full!"
-            />
-          </label>
-          <label class="flex min-w-0 flex-col gap-1 text-[var(--art-gray-600)]">
-            辅助单位（2）
-            <ElInput
-              v-model={row.auxiliaryUnit2}
-              maxlength={30}
-              placeholder="可选"
-              disabled={kind.value === 'receipt_notice' || kind.value === 'purchase_order'}
-            />
-          </label>
-          {(kind.value === 'purchase_order' || kind.value === 'receipt_notice') && (
-            <>
-              <label class="flex min-w-0 flex-col gap-1 text-[var(--art-gray-600)]">
-                仓库
-                <ElSelect
-                  v-model={row.warehouseId}
-                  filterable
-                  clearable
-                  placeholder="参选仓库"
-                  class="w-full!"
-                  onChange={() => {
-                    row.binId = undefined
-                    row.location = ''
-                  }}
-                >
-                  {warehouses.value.map((warehouse) => (
-                    <ElOption
-                      key={warehouse.id}
-                      value={warehouse.id}
-                      label={`${warehouse.warehouseCode} · ${warehouse.warehouseName}`}
-                    />
-                  ))}
-                </ElSelect>
-              </label>
-              <div class="flex min-w-0 flex-col gap-1 text-[var(--art-gray-600)] lg:col-span-2">
-                <span>仓位</span>
-                <div class="flex min-w-0 flex-col gap-2 sm:flex-row">
+      formatter: (row) => {
+        const hasWarehouse = kind.value === 'purchase_order' || kind.value === 'receipt_notice'
+        const warehouse = hasWarehouse
+          ? warehouses.value.find((item) => item.id === row.warehouseId)
+          : undefined
+        const material = hasWarehouse
+          ? materials.value.find((item) => item.id === row.materialId)
+          : undefined
+        return (
+          <div class="grid min-w-0 grid-cols-1 gap-3 p-4 text-xs sm:grid-cols-2 lg:grid-cols-4">
+            <label class="flex min-w-0 flex-col gap-1 text-[var(--art-gray-600)]">
+              需求日期
+              <ElDatePicker
+                v-model={row.needDate}
+                type="date"
+                value-format="YYYY-MM-DD"
+                class="w-full!"
+              />
+            </label>
+            {kind.value === 'purchase_order' && (
+              <>
+                <label class="flex min-w-0 flex-col gap-1 text-[var(--art-gray-600)]">
+                  需求部门
+                  <ElInput v-model={row.department} maxlength={120} placeholder="填写需求部门" />
+                </label>
+                <label class="flex min-w-0 flex-col gap-1 text-[var(--art-gray-600)]">
+                  申请人
+                  <ArtEmployeeSelect
+                    v-model={row.applicant}
+                    tenantId={header.value.tenantId}
+                    placeholder="参选员工"
+                    onChange={(_, rows) => {
+                      row.applicantName = rows[0]?.employeeName || ''
+                    }}
+                  />
+                </label>
+              </>
+            )}
+            <label class="flex min-w-0 flex-col gap-1 text-[var(--art-gray-600)]">
+              辅助数量
+              <ElInputNumber
+                v-model={row.auxiliaryQuantity}
+                min={0}
+                precision={3}
+                controls={false}
+                disabled={kind.value === 'receipt_notice' || kind.value === 'purchase_order'}
+                class="w-full!"
+              />
+            </label>
+            <label class="flex min-w-0 flex-col gap-1 text-[var(--art-gray-600)]">
+              辅助单位
+              <ElInput
+                v-model={row.auxiliaryUnit}
+                maxlength={30}
+                placeholder="可选"
+                disabled={kind.value === 'receipt_notice' || kind.value === 'purchase_order'}
+              />
+            </label>
+            <label class="flex min-w-0 flex-col gap-1 text-[var(--art-gray-600)]">
+              辅助数量（2）
+              <ElInputNumber
+                v-model={row.auxiliaryQuantity2}
+                min={0}
+                precision={3}
+                controls={false}
+                disabled={kind.value === 'receipt_notice' || kind.value === 'purchase_order'}
+                class="w-full!"
+              />
+            </label>
+            <label class="flex min-w-0 flex-col gap-1 text-[var(--art-gray-600)]">
+              辅助单位（2）
+              <ElInput
+                v-model={row.auxiliaryUnit2}
+                maxlength={30}
+                placeholder="可选"
+                disabled={kind.value === 'receipt_notice' || kind.value === 'purchase_order'}
+              />
+            </label>
+            {hasWarehouse && (
+              <>
+                <label class="flex min-w-0 flex-col gap-1 text-[var(--art-gray-600)]">
+                  仓库
                   <ElSelect
-                    v-model={row.binId}
+                    v-model={row.warehouseId}
                     filterable
                     clearable
-                    placeholder={
-                      warehouses.value.find((warehouse) => warehouse.id === row.warehouseId)
-                        ?.enableLocations === false
-                        ? '仓库直存'
-                        : '参选仓位'
-                    }
-                    class="min-w-0 flex-1!"
-                    disabled={
-                      !row.warehouseId ||
-                      warehouses.value.find((warehouse) => warehouse.id === row.warehouseId)
-                        ?.enableLocations === false
-                    }
+                    placeholder="参选仓库"
+                    class="w-full!"
+                    onChange={() => {
+                      row.binId = undefined
+                      row.location = ''
+                    }}
                   >
-                    {bins.value
-                      .filter(
-                        (bin) =>
-                          bin.warehouseId === row.warehouseId &&
-                          (!materials.value.find((material) => material.id === row.materialId)
-                            ?.serialManagementEnabled ||
-                            bin.supportsSerial)
-                      )
-                      .map((bin) => (
-                        <ElOption
-                          key={bin.id}
-                          value={bin.id}
-                          label={`${bin.binCode} · ${bin.binName}`}
-                        />
-                      ))}
+                    {warehouses.value.map((warehouse) => (
+                      <ElOption
+                        key={warehouse.id}
+                        value={warehouse.id}
+                        label={`${warehouse.warehouseCode} · ${warehouse.warehouseName}`}
+                      />
+                    ))}
                   </ElSelect>
-                  {kind.value === 'receipt_notice' && (
-                    <ElButton
-                      loading={recommendingLineId.value === row.lineId}
-                      disabled={
-                        !row.warehouseId ||
-                        !row.materialId ||
-                        !row.stockQuantity ||
-                        row.stockQuantity <= 0 ||
-                        warehouses.value.find((warehouse) => warehouse.id === row.warehouseId)
-                          ?.enableLocations === false
-                      }
-                      onClick={() => void recommendReceiptBin(row)}
+                </label>
+                <div class="flex min-w-0 flex-col gap-1 text-[var(--art-gray-600)] lg:col-span-2">
+                  <span>仓位</span>
+                  <div class="flex min-w-0 flex-col gap-2 sm:flex-row">
+                    <ElSelect
+                      v-model={row.binId}
+                      aria-label="仓位"
+                      filterable
+                      clearable
+                      placeholder={warehouse?.enableLocations === false ? '仓库直存' : '参选仓位'}
+                      class="min-w-0 flex-1!"
+                      disabled={!row.warehouseId || warehouse?.enableLocations === false}
                     >
-                      自动选位
-                    </ElButton>
-                  )}
+                      {bins.value
+                        .filter(
+                          (bin) =>
+                            bin.warehouseId === row.warehouseId &&
+                            (!material?.serialManagementEnabled || bin.supportsSerial)
+                        )
+                        .map((bin) => (
+                          <ElOption
+                            key={bin.id}
+                            value={bin.id}
+                            label={`${bin.binCode} · ${bin.binName}`}
+                          />
+                        ))}
+                    </ElSelect>
+                    {kind.value === 'receipt_notice' && (
+                      <ElButton
+                        loading={recommendingLineId.value === row.lineId}
+                        disabled={
+                          !row.warehouseId ||
+                          !row.materialId ||
+                          !row.stockQuantity ||
+                          row.stockQuantity <= 0 ||
+                          warehouse?.enableLocations === false
+                        }
+                        onClick={() => void recommendReceiptBin(row)}
+                      >
+                        自动选位
+                      </ElButton>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </>
-          )}
-          {kind.value === 'receipt_notice' && (
-            <>
-              <label class="flex min-w-0 flex-col gap-1 text-[var(--art-gray-600)]">
-                批号
-                <ArtTableSingleSelect
-                  v-model={row.batchNo}
-                  apiFn={(params: DataSelectFetchParams) => batchPickerApi(row, params)}
-                  columns={batchPickerColumns}
-                  rowKey="batchNo"
-                  labelKey="batchNo"
-                  title="批号主档"
-                  searchPlaceholder="搜索批号"
-                  disabled={!header.value.tenantId || !row.materialId}
-                  emptyText="暂无现有批号"
-                  emptyDescription="可通过旁边的“生成批号”按物料规则创建新批号。"
-                  dialogWidth="lg"
-                  showPagination={false}
-                />
-              </label>
-              <div class="flex flex-wrap items-end gap-2">
-                {config.value.permissions.GenerateBatch &&
-                  materials.value.find((material) => material.id === row.materialId)
-                    ?.batchManagementEnabled &&
-                  hasAuth(config.value.permissions.GenerateBatch) && (
-                    <ElButton onClick={() => void generateBatch(row)}>生成批号</ElButton>
-                  )}
-                {config.value.permissions.GenerateSerial &&
-                  hasAuth(config.value.permissions.GenerateSerial) && (
-                    <ElButton onClick={() => generateSerial(row)}>生成序列号</ElButton>
-                  )}
-              </div>
-              <span class="self-end text-[var(--art-gray-600)]">
-                已生成 {row.serialNumbers?.length ?? 0} 个序列号
-              </span>
-            </>
-          )}
-          <label class="flex min-w-0 flex-col gap-1 text-[var(--art-gray-600)] md:col-span-2">
-            备注
-            <ElInput v-model={row.remark} maxlength={200} placeholder="可选" />
-          </label>
-          <div class="flex items-end gap-4 text-[var(--art-gray-700)] md:col-span-2">
-            <span>含税单价 {formatCurrencyValue(lineTaxedUnitPrice(row))}</span>
-            <span>折扣额 {formatCurrencyValue(lineDiscountAmount(row))}</span>
+              </>
+            )}
+            {kind.value === 'receipt_notice' && (
+              <>
+                <label class="flex min-w-0 flex-col gap-1 text-[var(--art-gray-600)]">
+                  批号
+                  <ArtTableSingleSelect
+                    v-model={row.batchNo}
+                    apiFn={(params: DataSelectFetchParams) => batchPickerApi(row, params)}
+                    columns={batchPickerColumns}
+                    rowKey="batchNo"
+                    labelKey="batchNo"
+                    title="批号主档"
+                    searchPlaceholder="搜索批号"
+                    disabled={!header.value.tenantId || !row.materialId}
+                    emptyText="暂无现有批号"
+                    emptyDescription="可通过旁边的“生成批号”按物料规则创建新批号。"
+                    dialogWidth="lg"
+                    showPagination={false}
+                  />
+                </label>
+                <div class="flex flex-wrap items-end gap-2">
+                  {config.value.permissions.GenerateBatch &&
+                    material?.batchManagementEnabled &&
+                    hasAuth(config.value.permissions.GenerateBatch) && (
+                      <ElButton onClick={() => void generateBatch(row)}>生成批号</ElButton>
+                    )}
+                  {config.value.permissions.GenerateSerial &&
+                    hasAuth(config.value.permissions.GenerateSerial) && (
+                      <ElButton onClick={() => generateSerial(row)}>生成序列号</ElButton>
+                    )}
+                </div>
+                <span class="self-end text-[var(--art-gray-600)]">
+                  已生成 {row.serialNumbers?.length ?? 0} 个序列号
+                </span>
+              </>
+            )}
+            <label class="flex min-w-0 flex-col gap-1 text-[var(--art-gray-600)] md:col-span-2">
+              备注
+              <ElInput v-model={row.remark} maxlength={200} placeholder="可选" />
+            </label>
+            <div class="flex items-end gap-4 text-[var(--art-gray-700)] md:col-span-2">
+              <span>含税单价 {formatCurrencyValue(lineTaxedUnitPrice(row))}</span>
+              <span>折扣额 {formatCurrencyValue(lineDiscountAmount(row))}</span>
+            </div>
           </div>
-        </div>
-      )
+        )
+      }
     },
     ...(kind.value === 'purchase_contract' ||
     kind.value === 'purchase_request' ||
@@ -1946,7 +1952,10 @@
           icon="ri:delete-bin-line"
           label="移除物料"
           tone="danger"
-          onClick={() => lines.value.splice(lines.value.indexOf(row), 1)}
+          onClick={() => {
+            const index = lines.value.indexOf(row)
+            if (index >= 0) lines.value.splice(index, 1)
+          }}
         />
       )
     }
