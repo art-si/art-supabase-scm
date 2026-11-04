@@ -154,23 +154,29 @@ const { supabase, responseHandle, keysToSnakeDeep } = useSupabase()
 const documentSelect =
   '*,project:mdm_project!scm_purchase_document_project_id_fkey(project_code,project_name),document_type:mdm_document_type!scm_purchase_document_document_type_id_fkey(document_type_name)'
 
-export async function fetchScmPurchaseProjectOptions(tenantId: string) {
+export async function fetchScmPurchaseProjectOptions(
+  tenantId: string,
+  options?: PurchaseReadOptions
+) {
   const { data, error } = await fetchAllRangePages<ScmPurchaseProjectOption>(({ from, to }) =>
     responseHandle<ScmPurchaseProjectOption[]>(
       () =>
-        supabase
-          .from('mdm_project')
-          .select(
-            'id,tenant_id,project_code,project_name,customer_id,project_status,customer:mdm_customer!mdm_project_customer_tenant_fk(customer_name),salesperson:mdm_employee!mdm_project_sales_tenant_fk(employee_name),owner:mdm_employee!mdm_project_owner_tenant_fk(employee_name)'
-          )
-          .eq('tenant_id', tenantId)
-          .eq('enabled', true)
-          .order('project_name')
-          .order('id')
-          .range(from, to),
+        withRequestOptions(
+          supabase
+            .from('mdm_project')
+            .select(
+              'id,tenant_id,project_code,project_name,customer_id,project_status,customer:mdm_customer!mdm_project_customer_tenant_fk(customer_name),salesperson:mdm_employee!mdm_project_sales_tenant_fk(employee_name),owner:mdm_employee!mdm_project_owner_tenant_fk(employee_name)'
+            )
+            .eq('tenant_id', tenantId)
+            .eq('enabled', true)
+            .order('project_name')
+            .order('id')
+            .range(from, to),
+          options
+        ),
       {
         breakReturn: true,
-        showErrorMessage: true,
+        showErrorMessage: options?.showErrorMessage ?? true,
         errorMessage: '项目参选数据加载失败，请稍后重试'
       }
     )
@@ -252,38 +258,55 @@ export async function fetchScmPurchaseMaterialCandidates(
   return { data: data ?? [], total: total ?? 0 }
 }
 
-export async function fetchScmPurchaseWarehouseOptions(tenantId: string) {
+export async function fetchScmPurchaseWarehouseOptions(
+  tenantId: string,
+  options?: PurchaseReadOptions
+) {
   const { data, error } = await fetchAllRangePages<ScmPurchaseWarehouseOption>(({ from, to }) =>
     responseHandle<ScmPurchaseWarehouseOption[]>(
       () =>
-        supabase
-          .from('mdm_warehouse')
-          .select('id,warehouse_code,warehouse_name,enable_locations,responsible_employee_id')
-          .eq('tenant_id', tenantId)
-          .eq('status', 'enabled')
-          .order('warehouse_code')
-          .order('id')
-          .range(from, to),
-      { breakReturn: true, showErrorMessage: true, errorMessage: '仓库加载失败，请稍后重试' }
+        withRequestOptions(
+          supabase
+            .from('mdm_warehouse')
+            .select('id,warehouse_code,warehouse_name,enable_locations,responsible_employee_id')
+            .eq('tenant_id', tenantId)
+            .eq('status', 'enabled')
+            .order('warehouse_code')
+            .order('id')
+            .range(from, to),
+          options
+        ),
+      {
+        breakReturn: true,
+        showErrorMessage: options?.showErrorMessage ?? true,
+        errorMessage: '仓库加载失败，请稍后重试'
+      }
     )
   )
   if (error) throw error
   return data ?? []
 }
 
-export async function fetchScmPurchaseBinOptions(tenantId: string) {
+export async function fetchScmPurchaseBinOptions(tenantId: string, options?: PurchaseReadOptions) {
   const { data, error } = await fetchAllRangePages<ScmPurchaseBinOption>(({ from, to }) =>
     responseHandle<ScmPurchaseBinOption[]>(
       () =>
-        supabase
-          .from('mdm_warehouse_bin')
-          .select('id,warehouse_id,bin_code,bin_name,supports_serial')
-          .eq('tenant_id', tenantId)
-          .eq('status', 'available')
-          .order('bin_code')
-          .order('id')
-          .range(from, to),
-      { breakReturn: true, showErrorMessage: true, errorMessage: '仓位加载失败，请稍后重试' }
+        withRequestOptions(
+          supabase
+            .from('mdm_warehouse_bin')
+            .select('id,warehouse_id,bin_code,bin_name,supports_serial')
+            .eq('tenant_id', tenantId)
+            .eq('status', 'available')
+            .order('bin_code')
+            .order('id')
+            .range(from, to),
+          options
+        ),
+      {
+        breakReturn: true,
+        showErrorMessage: options?.showErrorMessage ?? true,
+        errorMessage: '仓位加载失败，请稍后重试'
+      }
     )
   )
   if (error) throw error
@@ -709,7 +732,10 @@ function payload(input: ScmPurchaseWrite) {
   })
 }
 
-export async function createScmPurchaseDocument(input: ScmPurchaseWrite) {
+export async function createScmPurchaseDocument(
+  input: ScmPurchaseWrite,
+  feedback: ApiFeedbackOptions = {}
+) {
   return responseHandle<ScmPurchaseDocument>(
     () =>
       supabase
@@ -719,7 +745,8 @@ export async function createScmPurchaseDocument(input: ScmPurchaseWrite) {
         .single(),
     {
       breakReturn: true,
-      showMessage: true,
+      showMessage: feedback.showMessage ?? true,
+      showErrorMessage: feedback.showErrorMessage ?? true,
       message: '采购单据已创建',
       errorMessage: '创建失败，请检查编号、来源数量和当前权限'
     }
@@ -816,7 +843,11 @@ export async function fetchScmPurchaseDeleteDependencies(selections: ScmPurchase
   return result.data
 }
 
-export async function fetchScmSupplierOptions(tenantId: string, supplierIds?: string[]) {
+export async function fetchScmSupplierOptions(
+  tenantId: string,
+  supplierIds?: string[],
+  options?: PurchaseReadOptions
+) {
   const ids = supplierIds === undefined ? null : uniq(supplierIds.filter(Boolean))
   if (ids?.length === 0) {
     const data: ScmSupplierOption[] = []
@@ -824,11 +855,18 @@ export async function fetchScmSupplierOptions(tenantId: string, supplierIds?: st
   }
   return responseHandle<ScmSupplierOption[]>(
     () =>
-      supabase.rpc('scm_purchase_suppliers_secure', {
-        p_tenant_id: tenantId,
-        p_ids: ids
-      }),
-    { breakReturn: true, showErrorMessage: true, errorMessage: '供应商列表加载失败，请稍后重试' }
+      withRequestOptions(
+        supabase.rpc('scm_purchase_suppliers_secure', {
+          p_tenant_id: tenantId,
+          p_ids: ids
+        }),
+        options
+      ),
+    {
+      breakReturn: true,
+      showErrorMessage: options?.showErrorMessage ?? true,
+      errorMessage: '供应商列表加载失败，请稍后重试'
+    }
   )
 }
 

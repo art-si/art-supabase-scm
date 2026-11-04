@@ -41,6 +41,7 @@
         :columns-factory="columnsFactory"
         :header-actions="headerActions"
         :selection-actions="selectionActions"
+        :import-context-key="importContextVersion"
         header-actions-placement="workspace"
         refresh-feedback="icon"
         :search-bar-props="{ span: 6, labelWidth: 82, showExpand: true }"
@@ -111,8 +112,9 @@
   import BusinessWorkspaceHeader from '@/components/business/business-workspace-header/index.vue'
   import { notifyFriendlyError, useArtFeedback } from '@/hooks/core/useArtFeedback'
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
-  import { useTenantScopeFormPolicy } from '@/hooks/core/useTenantScopeFormPolicy'
+  import { useTenantOperationGuard } from '@/hooks/core/useTenantOperationGuard'
   import { useUserStore } from '@/store/modules/user'
+  import { resolveTenantWriteTargetId } from '@/utils/tenant-scope-context'
   import { fetchEmployeeSelectorList } from '@/api/integration/employees'
   import type { ColumnOption } from '@/types'
   import { formatCurrencyValue } from '@/utils/ui/format'
@@ -144,6 +146,7 @@
     type ScmPurchaseDocument,
     type ScmPurchaseKind,
     type ScmPurchaseLine,
+    type ScmPurchaseWrite,
     type ScmPurchaseQuery
   } from '@scm/api'
   import { purchaseConfigs, type PurchaseTransition } from './purchase-config'
@@ -203,7 +206,7 @@
   const { isPlatformSuper } = storeToRefs(userStore)
   const tenantScopeStore = useTenantScopeStore()
   const { effectiveTenantId, tenantOptions: availableTenants } = storeToRefs(tenantScopeStore)
-  const { defaultWriteTenantId } = useTenantScopeFormPolicy()
+  const captureOperation = useTenantOperationGuard()
   const tenantOptions = computed(() =>
     availableTenants.value.map((tenant) => ({
       label: `${tenant.tenantName}（${tenant.tenantCode}）`,
@@ -285,9 +288,98 @@
     tableRef.value?.clearSelection()
     await tableRef.value?.refreshContext()
   }
-  const importTenantId = computed(
-    () => effectiveTenantId.value || search.value.tenantId || defaultWriteTenantId.value || ''
+  const importContextVersion = ref(0)
+  const quietImportRead = { showErrorMessage: false } as const
+  watch(
+    effectiveTenantId,
+    (selected) => {
+      if (selected && search.value.tenantId && search.value.tenantId !== selected)
+        search.value.tenantId = undefined
+    },
+    { flush: 'sync' }
   )
+  watch(
+    () => [
+      route.fullPath,
+      props.kind,
+      tenantScopeStore.revision,
+      effectiveTenantId.value,
+      search.value.tenantId,
+      userStore.getUserInfo.userId,
+      userStore.getUserInfo.tenantId,
+      userStore.isPlatformSuper,
+      hasAuth(config.value.permissions.Import),
+      hasAuth(config.value.permissions.Add)
+    ],
+    () => importContextVersion.value++,
+    { flush: 'sync' }
+  )
+  onDeactivated(() => importContextVersion.value++)
+  const importTenantId = computed(() => {
+    try {
+      return resolveTenantWriteTargetId({
+        explicitTenantId: search.value.tenantId,
+        effectiveTenantId: effectiveTenantId.value,
+        actorTenantId: userStore.getUserInfo.tenantId,
+        canWriteToOtherTenant: userStore.isPlatformSuper
+      })
+    } catch {
+      return ''
+    }
+  })
+  function captureImport(kind: ScmPurchaseKind) {
+    const operationCurrent = captureOperation()
+    const version = importContextVersion.value
+    const permission = purchaseConfigs[kind].permissions
+    if (props.kind !== kind || !hasAuth(permission.Import) || !hasAuth(permission.Add))
+      throw new Error('当前账号无权导入该采购单据，请刷新权限后重试')
+    const tenantId = resolveTenantWriteTargetId({
+      explicitTenantId: search.value.tenantId,
+      effectiveTenantId: effectiveTenantId.value,
+      actorTenantId: userStore.getUserInfo.tenantId,
+      canWriteToOtherTenant: userStore.isPlatformSuper
+    })
+    const isCurrent = () =>
+      operationCurrent() &&
+      importContextVersion.value === version &&
+      props.kind === kind &&
+      hasAuth(permission.Import) &&
+      hasAuth(permission.Add)
+    const assertCurrent = () => {
+      if (!isCurrent()) throw new Error('导入上下文已变化，请返回原租户核对结果后重新导入')
+    }
+    const read = async <T,>(load: () => Promise<T>): Promise<T> => {
+      assertCurrent()
+      const result = await load()
+      assertCurrent()
+      return result
+    }
+    return { tenantId, isCurrent, assertCurrent, read }
+  }
+  async function submitImportedDocuments(
+    documents: ScmPurchaseWrite[],
+    context: ReturnType<typeof captureImport>
+  ): Promise<void> {
+    let submitted = 0
+    try {
+      for (const document of documents) {
+        context.assertCurrent()
+        await createScmPurchaseDocument(document, {
+          showMessage: false,
+          showErrorMessage: false
+        })
+        submitted++
+        context.assertCurrent()
+      }
+    } catch (error) {
+      if (submitted && context.isCurrent())
+        throw new Error(`已导入 ${submitted} 份单据，其余未完成；请刷新核对后再重试`, {
+          cause: error
+        })
+      if (submitted) ElMessage.warning(`已导入 ${submitted} 份单据；请返回原租户核对结果`)
+      throw error
+    }
+  }
   const requestImportColumns = [
     { key: 'requestKey', title: '导入分组号', required: true },
     { key: 'projectCode', title: '项目编码' },
@@ -393,7 +485,7 @@
     {
       permission: config.value.permissions.Import,
       type: 'import',
-      label: importTenantId.value ? '导入' : '请先选择所属租户',
+      label: importTenantId.value ? '导入' : '导入目标租户与当前范围不一致',
       hidden: !['purchase_request', 'purchase_order', 'receipt_notice'].includes(props.kind),
       disabled: !importTenantId.value || !hasAuth(config.value.permissions.Add),
       importColumns:
@@ -410,6 +502,9 @@
             : importRequests,
       onImportError: (error: Error) => {
         notifyFriendlyError(error, '导入文件解析失败，请检查模板后重试')
+      },
+      onImportSuccess: () => {
+        ElMessage.success('采购单据导入完成')
       }
     },
     {
@@ -1350,16 +1445,18 @@
     }))
   }
   async function importReceipts(rows: Array<Record<string, unknown>>): Promise<void> {
-    const tenantId = importTenantId.value
-    if (!tenantId || !hasAuth('ScmReceiptNotice:Add')) throw new Error('请选择有新增权限的业务租户')
+    const context = captureImport('receipt_notice')
+    const { tenantId } = context
     if (!rows.length || rows.length > 2000) throw new Error('每次可导入 1–2000 行收料明细')
-    const [projects, supplierResult, materialResult, warehouses, bins] = await Promise.all([
-      fetchScmPurchaseProjectOptions(tenantId),
-      fetchScmSupplierOptions(tenantId),
-      fetchScmMaterialOptions(tenantId),
-      fetchScmPurchaseWarehouseOptions(tenantId),
-      fetchScmPurchaseBinOptions(tenantId)
-    ])
+    const [projects, supplierResult, materialResult, warehouses, bins] = await context.read(() =>
+      Promise.all([
+        fetchScmPurchaseProjectOptions(tenantId, quietImportRead),
+        fetchScmSupplierOptions(tenantId, undefined, quietImportRead),
+        fetchScmMaterialOptions(tenantId, undefined, quietImportRead),
+        fetchScmPurchaseWarehouseOptions(tenantId, quietImportRead),
+        fetchScmPurchaseBinOptions(tenantId, quietImportRead)
+      ])
+    )
     const projectByCode = new Map(projects.map((item) => [item.projectCode, item]))
     const supplierByCode = new Map(
       (supplierResult.data ?? []).map((item) => [item.supplierCode, item])
@@ -1385,6 +1482,7 @@
     >()
     const used = new Map<string, number>()
     for (const [index, row] of rows.entries()) {
+      context.assertCurrent()
       const at = `第 ${index + 2} 行`
       const key = String(row.receiptKey ?? '').trim()
       const projectCode = String(row.projectCode ?? '').trim()
@@ -1413,7 +1511,9 @@
         if (!sourceChoices.has(sourceKey))
           sourceChoices.set(
             sourceKey,
-            await fetchScmReceiptOrderLineChoices(tenantId, supplier.id, project?.id)
+            await context.read(() =>
+              fetchScmReceiptOrderLineChoices(tenantId, supplier.id, project?.id, quietImportRead)
+            )
           )
         source = sourceChoices
           .get(sourceKey)
@@ -1531,8 +1631,8 @@
       })
       groups.set(key, group)
     }
-    for (const group of groups.values())
-      await createScmPurchaseDocument({
+    await submitImportedDocuments(
+      Array.from(groups.values(), (group): ScmPurchaseWrite => ({
         tenantId,
         kind: 'receipt_notice',
         documentNo: '',
@@ -1548,18 +1648,21 @@
         deliveryPlans: [],
         clauses: [],
         remark: group.remark
-      })
+      })),
+      context
+    )
   }
   async function importRequests(rows: Array<Record<string, unknown>>): Promise<void> {
-    const tenantId = importTenantId.value
-    if (!tenantId || !hasAuth('ScmPurchaseRequest:Add'))
-      throw new Error('请选择有新增权限的业务租户')
+    const context = captureImport('purchase_request')
+    const { tenantId } = context
     if (!rows.length) throw new Error('导入文件没有采购申请明细')
-    const [projects, materialResult, supplierResult] = await Promise.all([
-      fetchScmPurchaseProjectOptions(tenantId),
-      fetchScmMaterialOptions(tenantId),
-      fetchScmSupplierOptions(tenantId)
-    ])
+    const [projects, materialResult, supplierResult] = await context.read(() =>
+      Promise.all([
+        fetchScmPurchaseProjectOptions(tenantId, quietImportRead),
+        fetchScmMaterialOptions(tenantId, undefined, quietImportRead),
+        fetchScmSupplierOptions(tenantId, undefined, quietImportRead)
+      ])
+    )
     const projectByCode = new Map(projects.map((item) => [item.projectCode, item]))
     const materialByCode = new Map(
       (materialResult.data ?? []).map((item) => [item.materialCode, item])
@@ -1572,6 +1675,7 @@
       { projectCode: string; documentDate: string; lines: ScmPurchaseLine[]; remark: string }
     >()
     rows.forEach((row, index) => {
+      context.assertCurrent()
       const sourceRow = index + 2
       const requestKey = String(row.requestKey ?? '').trim()
       const projectCode = String(row.projectCode ?? '').trim()
@@ -1632,9 +1736,10 @@
       })
       groups.set(requestKey, group)
     })
+    const documents: ScmPurchaseWrite[] = []
     for (const [requestKey, group] of groups) {
       const project = projectByCode.get(group.projectCode)
-      await createScmPurchaseDocument({
+      documents.push({
         tenantId,
         kind: 'purchase_request',
         documentNo: '',
@@ -1652,23 +1757,27 @@
         remark: group.remark || `导入分组 ${requestKey}`
       })
     }
+    await submitImportedDocuments(documents, context)
   }
   async function importOrders(rows: Array<Record<string, unknown>>): Promise<void> {
-    const tenantId = importTenantId.value
-    if (!tenantId || !hasAuth('ScmPurchaseOrder:Add'))
-      throw new Error('请选择有新增采购订单权限的业务租户')
+    const context = captureImport('purchase_order')
+    const { tenantId } = context
     if (!rows.length) throw new Error('导入文件没有采购订单明细')
-    await userStore.ensureDictLoaded('scmTaxRate')
-    const [projects, materialResult, supplierResult, warehouses, bins] = await Promise.all([
-      fetchScmPurchaseProjectOptions(tenantId),
-      fetchScmMaterialOptions(tenantId),
-      fetchScmSupplierOptions(tenantId),
-      fetchScmPurchaseWarehouseOptions(tenantId),
-      fetchScmPurchaseBinOptions(tenantId)
-    ])
+    await context.read(() => userStore.ensureDictLoaded('scmTaxRate'))
+    const [projects, materialResult, supplierResult, warehouses, bins] = await context.read(() =>
+      Promise.all([
+        fetchScmPurchaseProjectOptions(tenantId, quietImportRead),
+        fetchScmMaterialOptions(tenantId, undefined, quietImportRead),
+        fetchScmSupplierOptions(tenantId, undefined, quietImportRead),
+        fetchScmPurchaseWarehouseOptions(tenantId, quietImportRead),
+        fetchScmPurchaseBinOptions(tenantId, quietImportRead)
+      ])
+    )
     const employees: Array<{ id: string; employeeNo: string }> = []
     for (let from = 0; ; from += 200) {
-      const page = await fetchEmployeeSelectorList({ tenantId, from, to: from + 199 })
+      const page = await context.read(() =>
+        fetchEmployeeSelectorList({ tenantId, from, to: from + 199 }, quietImportRead)
+      )
       if (page.error) throw new Error('采购员花名册加载失败')
       employees.push(...page.data)
       if (employees.length >= page.total || !page.data.length) break
@@ -1697,6 +1806,7 @@
       }
     >()
     rows.forEach((row, index) => {
+      context.assertCurrent()
       const at = `第 ${index + 2} 行`
       const key = String(row.orderKey ?? '').trim()
       const project = projectByCode.get(String(row.projectCode ?? '').trim())
@@ -1795,8 +1905,8 @@
       })
       groups.set(key, group)
     })
-    for (const [key, group] of groups)
-      await createScmPurchaseDocument({
+    await submitImportedDocuments(
+      Array.from(groups, ([key, group]): ScmPurchaseWrite => ({
         tenantId,
         kind: 'purchase_order',
         documentNo: '',
@@ -1812,6 +1922,8 @@
         deliveryPlans: [],
         clauses: [],
         remark: group.remark || `导入分组 ${key}`
-      })
+      })),
+      context
+    )
   }
 </script>
