@@ -17,19 +17,36 @@
         title="当前租户暂无可用项目"
         description="采购单据需要关联项目。请在页头切换到有项目的业务租户后重新打开，或先在 MDM 主数据维护项目。"
       />
-      <ArtSectionCard title="单据基本信息" subtitle="确定采购业务的项目、供应商与交付时间。">
-        <ArtForm
-          ref="headerFormRef"
-          v-model="header"
-          :items="headerItems"
-          :rules="headerRules"
-          :validate-on-rule-change="false"
-          :span="12"
-          :gutter="20"
-          label-width="112px"
-        >
-        </ArtForm>
-      </ArtSectionCard>
+      <ArtForm
+        ref="headerFormRef"
+        v-model="header"
+        :items="formItems"
+        :rules="headerRules"
+        :validate-on-rule-change="false"
+        :span="12"
+        :gutter="20"
+        label-width="112px"
+        root-class="p-0! md:p-0!"
+      >
+        <template #layout="{ fields }">
+          <div class="flex min-w-0 flex-col gap-4">
+            <ArtSectionCard title="单据基本信息" subtitle="确定采购业务的项目、供应商与交付时间。">
+              <component :is="fields" :items="headerItems" :actions="false" />
+            </ArtSectionCard>
+            <component :is="fields" :items="attachmentItems" :actions="false" />
+          </div>
+        </template>
+        <template #contractAttachments>
+          <ScmContractAttachments
+            :key="attachmentContextKey"
+            ref="contractAttachmentsRef"
+            v-model="header.contractAttachments"
+            :tenant-id="header.tenantId"
+            :context-key="attachmentContextKey"
+            :readonly="!canEditContractAttachments"
+          />
+        </template>
+      </ArtForm>
       <ArtSectionCard
         v-if="config.fields.length"
         title="业务信息"
@@ -531,6 +548,7 @@
   import ArtTableSingleSelect from '@/components/core/forms/art-data-select/table-single.vue'
   import ArtTableMultipleSelect from '@/components/core/forms/art-data-select/table-multiple.vue'
   import type { DataSelectColumn } from '@/components/core/forms/art-data-select/types'
+  import ScmContractAttachments from '@scm/components/scm-contract-attachments.vue'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import ArtTable, { type ArtTableExpose } from '@/components/core/tables/art-table/index.vue'
   import ArtIconButton from '@/components/core/widget/art-icon-button/index.vue'
@@ -570,6 +588,7 @@
     fetchScmSourceOptions,
     fetchScmSupplierOptions,
     updateScmPurchaseDocument,
+    type ScmContractAttachment,
     type ScmDocumentTypeOption,
     type ScmDocumentLine,
     type ScmMaterialOption,
@@ -609,6 +628,7 @@
     effectiveTenantId: string | null
   }
   interface HeaderModel {
+    contractAttachments: ScmContractAttachment[]
     tenantId: string
     documentNo: string
     documentTypeId: string
@@ -637,6 +657,23 @@
     reload: () => Promise<void>
   }>()
   const headerFormRef = ref<{ validate: () => Promise<boolean>; clearValidate: () => void }>()
+  const contractAttachmentsRef = ref<{ hasPendingUpload: () => boolean }>()
+  const attachmentContextKey = ref('')
+  const canEditContractAttachments = computed(() =>
+    hasAuth(
+      recordId.value
+        ? 'ScmPurchaseContract:Edit'
+        : currentOpenOptions.value?.copy
+          ? 'ScmPurchaseContract:Copy'
+          : 'ScmPurchaseContract:Add'
+    )
+  )
+  const attachmentItems = computed<FormItem[]>(() =>
+    kind.value === 'purchase_contract'
+      ? [{ key: 'contractAttachments', label: '', type: 'contractAttachmentTable', span: 24 }]
+      : []
+  )
+  const formItems = computed<FormItem[]>(() => [...headerItems.value, ...attachmentItems.value])
   const lineTableRef = ref<ArtTableExpose>()
   const kind = ref<ScmPurchaseKind>('purchase_contract')
   const taxRateOptions = useDictionaryOptions('scmTaxRate', Number)
@@ -733,6 +770,7 @@
   const quotationSourceMode = ref<'all' | 'request' | 'quotation'>('all')
 
   const emptyHeader = (): HeaderModel => ({
+    contractAttachments: [],
     tenantId: '',
     documentNo: '',
     documentTypeId: '',
@@ -3631,6 +3669,10 @@
     return true
   }
   async function handleSubmit() {
+    if (contractAttachmentsRef.value?.hasPendingUpload()) {
+      ElMessage.warning('合同附件正在上传，请等待上传完成后再保存')
+      return false
+    }
     if (initializationError.value || !referencesLoaded.value) {
       ElMessage.warning('基础数据尚未加载完成，请重新加载后再创建单据')
       return false
@@ -3649,6 +3691,16 @@
       return false
     }
 
+    if (contractAttachmentsRef.value?.hasPendingUpload()) {
+      ElMessage.warning('合同附件正在上传，请等待上传完成后再保存')
+      return false
+    }
+    const cleanDetails = { ...details.value }
+    if (kind.value === 'purchase_contract') {
+      cleanDetails.contractAttachments = header.value.contractAttachments
+    } else {
+      delete cleanDetails.contractAttachments
+    }
     try {
       const input: ScmPurchaseWrite = {
         tenantId: header.value.tenantId,
@@ -3660,7 +3712,7 @@
         sourceId: header.value.sourceId || null,
         documentDate: header.value.documentDate,
         deliveryDate: header.value.deliveryDate || null,
-        details: { ...details.value },
+        details: cleanDetails,
         lines: lines.value.map((line) => {
           if (kind.value !== 'receipt_notice' && kind.value !== 'purchase_order')
             return { ...line, quantity: line.quantity ?? null }
@@ -3688,6 +3740,7 @@
     }
   }
   async function handleOpen(options: OpenOptions) {
+    attachmentContextKey.value = crypto.randomUUID()
     const revision = ++openRevision
     invalidateRecommendation()
     invalidateSourceSelection()
@@ -3715,7 +3768,11 @@
       supplierId: options.record?.supplierId ?? '',
       sourceId: options.copy ? '' : (options.record?.sourceId ?? ''),
       deliveryDate: options.record?.deliveryDate ?? '',
-      remark: options.record?.remark ?? ''
+      remark: options.record?.remark ?? '',
+      contractAttachments:
+        options.kind === 'purchase_contract'
+          ? (options.record?.details.contractAttachments ?? []).map((item) => ({ ...item }))
+          : []
     })
     for (const key of Object.keys(details.value))
       delete details.value[key as keyof ScmPurchaseDetails]
@@ -3839,6 +3896,7 @@
         await initializeOpeningData(options, api, revision)
       },
       onClose: () => {
+        attachmentContextKey.value = crypto.randomUUID()
         ++openRevision
         ++referenceRevision
         invalidateRecommendation()
@@ -4089,6 +4147,7 @@
     () => header.value.tenantId,
     (tenantId, previous) => {
       if (preparing || tenantId === previous) return
+      header.value.contractAttachments = []
       invalidateRecommendation()
       invalidateSourceSelection()
       header.value.projectId = ''

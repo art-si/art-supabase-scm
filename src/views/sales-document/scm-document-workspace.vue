@@ -17,6 +17,18 @@
         </template>
       </BusinessWorkspaceHeader>
 
+      <ElAlert
+        v-if="linkedDocumentError"
+        type="error"
+        title="关联合同暂未打开"
+        :closable="false"
+        show-icon
+      >
+        <span>请核对单据类型、租户与查看权限，原链接已保留。</span>
+        <ElButton type="primary" link @click="retryLinkedDocument">
+          <ArtSvgIcon icon="ri:refresh-line" />重新打开合同
+        </ElButton>
+      </ElAlert>
       <ArtTableQuery
         ref="tableRef"
         v-model="search"
@@ -103,6 +115,7 @@
   import { useAuth } from '@/hooks/core/useAuth'
   import { createRecordReferenceNavigation } from '@/components/business/master-data-delete-guard/record-navigation'
   import { useRecordDeleteGuard } from '@/hooks/core/useRecordDeleteGuard'
+  import { useRouteDocumentDrawer } from '@/hooks/core/useRouteDocumentDrawer'
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
   import { useTenantScopeFormPolicy } from '@/hooks/core/useTenantScopeFormPolicy'
   import { useUserStore } from '@/store/modules/user'
@@ -229,6 +242,22 @@
     { prop: 'quantity', label: '可发数量', width: 110, align: 'right' }
   ]
   const detailDrawerRef = ref<{ handleOpen: (record: ScmSalesDocument) => Promise<void> }>()
+  const { error: linkedDocumentError, retry: retryLinkedDocument } = useRouteDocumentDrawer({
+    routeName: () => config.value.menuName,
+    queryKey: 'recordId',
+    canOpen: () => props.kind === 'sales_contract' && hasAuth('ScmSalesContract:View'),
+    fetchDocument: async (id) => {
+      const result = await fetchScmSalesDocument(id)
+      if (result.error) throw result.error
+      if (!result.data || result.data.id !== id || result.data.kind !== props.kind)
+        throw new Error('销售合同不存在、类型不符或暂无查看权限')
+      return result.data
+    },
+    openDocument: async (record) => {
+      if (!detailDrawerRef.value) throw new Error('合同详情尚未就绪，请重试')
+      await detailDrawerRef.value.handleOpen(record)
+    }
+  })
   const conversionDialogRef = ref<{
     handleOpen: (options: {
       quotation: ScmSalesDocument

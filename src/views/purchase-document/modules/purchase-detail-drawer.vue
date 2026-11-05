@@ -215,6 +215,14 @@
               >
             </ArtSectionCard>
           </ElTabPane>
+          <ElTabPane v-if="record.kind === 'purchase_contract'" name="attachments" label="合同附件">
+            <ScmContractAttachments
+              :model-value="record.details.contractAttachments ?? []"
+              :tenant-id="record.tenantId"
+              :context-key="record.id"
+              readonly
+            />
+          </ElTabPane>
         </ElTabs>
       </div>
     </ArtAsyncState>
@@ -222,6 +230,7 @@
 </template>
 
 <script setup lang="ts">
+  import ScmContractAttachments from '@scm/components/scm-contract-attachments.vue'
   import ArtDescriptions from '@/components/core/base/art-descriptions/index.vue'
   import type { ArtDescriptionItem } from '@/components/core/base/art-descriptions/types'
   import ArtDrawer from '@/components/core/drawers/art-drawer/index.vue'

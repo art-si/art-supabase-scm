@@ -353,7 +353,10 @@ function writePayload(input: ScmSalesDocumentWrite) {
     documentDate: input.documentDate,
     deliveryDate: input.deliveryDate,
     currency: normalizeNonNullableText(input.currency),
-    details: input.details,
+    details:
+      input.kind === 'sales_contract'
+        ? input.details
+        : omit(input.details, ['contractAttachments']),
     lines: input.lines.map((line) =>
       omit(line, [
         'shippingNoticeQuantity',

@@ -55,6 +55,8 @@ This repository owns domain pages, APIs, types and rules at `modules/art-supabas
 
 Ordinary users operate within their authenticated tenant and business permissions. Platform superusers may work across tenants or select a tenant; mutations retain an explicit record or parent tenant. Cross-module actions also require target-module permissions. Deletions use `MasterDataDeleteGuard` before confirmation and server-side reference enforcement; failed checks block deletion and allow retry.
 
+Sales and purchase contract attachments live in document `details.contract_attachments` with a name, resource URL, file type and byte size. Saving a contract checks and locks the tenant-owned `sys_attachment` row; resource deletion is blocked while a contract references it. Conversion to another document kind removes this contract-only field. The host regression script is `tests/integration/scm-contract-attachments.sql`.
+
 Commit and push module changes before updating the host's submodule pointer. Keep both README languages aligned with the implementation and documentation.
 
 ## License

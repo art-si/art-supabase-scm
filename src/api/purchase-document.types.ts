@@ -1,3 +1,5 @@
+import type { ScmContractAttachment } from './contract-attachment.types'
+
 export type ScmPurchaseKind =
   'purchase_contract' | 'purchase_request' | 'purchase_order' | 'receipt_notice'
 export type ScmPurchaseStatus =
@@ -101,6 +103,7 @@ export interface ScmPurchaseClause {
 }
 
 export interface ScmPurchaseDetails {
+  contractAttachments?: ScmContractAttachment[]
   constructionNo?: string
   title?: string
   paperContractNo?: string

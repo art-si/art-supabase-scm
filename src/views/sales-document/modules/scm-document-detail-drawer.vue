@@ -194,6 +194,14 @@
               </div>
             </ArtSectionCard>
           </ElTabPane>
+          <ElTabPane v-if="record.kind === 'sales_contract'" name="attachments" label="合同附件">
+            <ScmContractAttachments
+              :model-value="record.details.contractAttachments ?? []"
+              :tenant-id="record.tenantId"
+              :context-key="record.id"
+              readonly
+            />
+          </ElTabPane>
         </ElTabs>
       </div>
     </ArtAsyncState>
@@ -209,6 +217,7 @@
   import type { ArtDrawerExpose } from '@/components/core/drawers/art-drawer/types'
   import ArtEntitySummary from '@/components/core/surfaces/art-entity-summary/index.vue'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
+  import ScmContractAttachments from '../../../components/scm-contract-attachments.vue'
   import { formatCurrencyValue } from '@/utils/ui/format'
   import { createFriendlySupabaseError } from '@/utils/supabase/error'
   import { useUnitDisplayNames } from '@/hooks/core/useUnitDisplayNames'

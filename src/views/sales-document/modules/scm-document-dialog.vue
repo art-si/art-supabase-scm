@@ -14,19 +14,50 @@
         :min-height="96"
         @retry="loadReferences(header.tenantId)"
       />
-      <ArtSectionCard title="单据基本信息" subtitle="单据编号、项目和客户确定此单据的业务归属。">
-        <ArtForm
-          ref="headerFormRef"
-          v-model="header"
-          :items="headerItems"
-          :rules="headerRules"
-          :validate-on-rule-change="false"
-          :span="12"
-          :gutter="20"
-          label-width="112px"
-        >
-        </ArtForm>
-      </ArtSectionCard>
+      <ArtForm
+        ref="headerFormRef"
+        v-model="header"
+        :items="headerItems"
+        :rules="headerRules"
+        :validate-on-rule-change="false"
+        :span="12"
+        :gutter="20"
+        label-width="112px"
+        root-class="p-0!"
+      >
+        <template #layout="{ fields }">
+          <div class="flex min-w-0 flex-col gap-4">
+            <ArtSectionCard
+              title="单据基本信息"
+              subtitle="单据编号、项目和客户确定此单据的业务归属。"
+            >
+              <component :is="fields" :items="baseHeaderItems" :actions="false" />
+            </ArtSectionCard>
+            <component
+              :is="fields"
+              v-if="kind === 'sales_contract'"
+              :items="attachmentItems"
+              :actions="false"
+            />
+          </div>
+        </template>
+        <template #contractAttachments>
+          <ScmContractAttachments
+            :key="attachmentContextKey"
+            ref="contractAttachmentsRef"
+            v-model="header.contractAttachments"
+            :tenant-id="header.tenantId"
+            :context-key="attachmentContextKey"
+            :readonly="
+              copyMode
+                ? !hasAuth('ScmSalesContract:Copy')
+                : recordId
+                  ? !hasAuth('ScmSalesContract:Edit')
+                  : !hasAuth('ScmSalesContract:Add')
+            "
+          />
+        </template>
+      </ArtForm>
 
       <ArtSectionCard
         v-if="config.fields.length && kind !== 'project_quotation'"
@@ -448,6 +479,8 @@
     DataSelectColumn
   } from '@/components/core/forms/art-data-select/types'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
+  import { useAuth } from '@/hooks/core/useAuth'
+  import ScmContractAttachments from '../../../components/scm-contract-attachments.vue'
   import ArtAsyncState from '@/components/core/feedback/art-async-state/index.vue'
   import ArtTable, { type ArtTableExpose } from '@/components/core/tables/art-table/index.vue'
   import ArtIconButton from '@/components/core/widget/art-icon-button/index.vue'
@@ -469,6 +502,7 @@
     fetchScmSourceOptions,
     updateScmSalesDocument,
     type ScmContractClause,
+    type ScmContractAttachment,
     type ScmCustomerOption,
     type ScmDeliveryPlan,
     type ScmDocumentDetails,
@@ -498,6 +532,7 @@
 
   defineOptions({ name: 'ScmDocumentDialog' })
   const { loadUnitDisplayNames, unitDisplayName } = useUnitDisplayNames()
+  const { hasAuth } = useAuth()
 
   interface OpenOptions {
     kind: ScmDocumentKind
@@ -520,6 +555,7 @@
     deliveryDate: string
     currency: string
     remark: string
+    contractAttachments: ScmContractAttachment[]
   }
 
   const emit = defineEmits<{ success: [mode: 'add' | 'edit'] }>()
@@ -528,6 +564,7 @@
   const dialogRef = ref<ArtDialogExpose<OpenOptions>>()
   const shippingOrderPickerRef = ref<ArtDialogExpose>()
   const headerFormRef = ref<{ validate: () => Promise<boolean>; clearValidate: () => void }>()
+  const contractAttachmentsRef = ref<{ hasPendingUpload: () => boolean }>()
   const detailsFormRef = ref<{ validate: () => Promise<boolean>; clearValidate: () => void }>()
   const quotationLineTableRef = ref<{
     validate: () => Promise<boolean>
@@ -537,6 +574,7 @@
   const kind = ref<ScmDocumentKind>('sales_quotation')
   const config = computed(() => scmDocumentConfigs[kind.value])
   const recordId = ref<string>()
+  const copyMode = ref(false)
   const tenantOptions = ref<OpenOptions['tenantOptions']>([])
   const projectOptions = ref<ScmProjectOption[]>([])
   const quotationDocuments = ref<ScmSalesDocument[]>([])
@@ -582,6 +620,7 @@
   const referencesLoading = ref(false)
   const referenceError = ref<Error | null>(null)
   const activeTab = ref('lines')
+  const attachmentContextKey = ref(crypto.randomUUID())
   let loadingSeed: { source: ScmSalesDocument; lineIds?: string[] } | undefined
   let preparing = false
   let referenceRevision = 0
@@ -607,7 +646,8 @@
       documentDate: dayjs().format('YYYY-MM-DD'),
       deliveryDate: '',
       currency: 'CNY',
-      remark: ''
+      remark: '',
+      contractAttachments: []
     }
   }
 
@@ -794,7 +834,7 @@
 
   const activeDetailFields = computed(() => config.value.fields)
 
-  const headerItems = computed<FormItem[]>(() => [
+  const baseHeaderItems = computed<FormItem[]>(() => [
     ...(shouldExposeTenantField.value
       ? [
           { label: '数据归属', key: 'tenantSection', type: 'divider', span: 24 } as FormItem,
@@ -967,6 +1007,24 @@
       span: 24,
       props: { type: 'textarea', rows: 2, maxlength: 500, showWordLimit: true }
     }
+  ])
+
+  const attachmentItems = computed<FormItem[]>(() =>
+    kind.value === 'sales_contract'
+      ? [
+          {
+            key: 'contractAttachments',
+            label: '',
+            type: 'slot',
+            span: 24,
+            labelWidth: '0px'
+          }
+        ]
+      : []
+  )
+  const headerItems = computed<FormItem[]>(() => [
+    ...baseHeaderItems.value,
+    ...attachmentItems.value
   ])
 
   const planForm = reactive({ details, paymentPlans, deliveryPlans, clauses })
@@ -2051,6 +2109,10 @@
       ElMessage.warning('请等待单据选项加载成功后再提交')
       return false
     }
+    if (kind.value === 'sales_contract' && contractAttachmentsRef.value?.hasPendingUpload()) {
+      ElMessage.warning('合同附件仍在上传，请完成后再保存')
+      return false
+    }
     try {
       if (!(await headerFormRef.value?.validate())) return false
       if (revision !== openRevision) return false
@@ -2075,8 +2137,15 @@
       }
       if (revision !== openRevision || referencesLoading.value || referenceError.value) return false
       if (!validateDetails()) return false
+      if (kind.value === 'sales_contract' && contractAttachmentsRef.value?.hasPendingUpload()) {
+        ElMessage.warning('合同附件仍在上传，请完成后再保存')
+        return false
+      }
       const cleanDetails: ScmDocumentDetails = { ...details.value }
       if (kind.value === 'shipping_notice') delete cleanDetails.constructionNo
+      if (kind.value === 'sales_contract')
+        cleanDetails.contractAttachments = [...header.value.contractAttachments]
+      else delete cleanDetails.contractAttachments
       const payload: ScmSalesDocumentWrite = {
         tenantId: header.value.tenantId,
         kind: kind.value,
@@ -2131,9 +2200,11 @@
 
   async function handleOpen(options: OpenOptions): Promise<void> {
     invalidateOpen()
+    attachmentContextKey.value = crypto.randomUUID()
     const revision = openRevision
     preparing = true
     kind.value = options.kind
+    copyMode.value = Boolean(options.copy)
     recordId.value = options.copy ? undefined : options.record?.id
     tenantOptions.value = options.tenantOptions
     Object.assign(header.value, initialHeader(), options.record ?? {}, {
@@ -2145,7 +2216,11 @@
       customerId: options.record?.customerId ?? '',
       sourceId: options.copy ? '' : (options.record?.sourceId ?? ''),
       deliveryDate: options.record?.deliveryDate ?? '',
-      remark: options.record?.remark ?? ''
+      remark: options.record?.remark ?? '',
+      contractAttachments:
+        options.kind === 'sales_contract'
+          ? cloneDeep(options.record?.details.contractAttachments ?? [])
+          : []
     })
     for (const key of Object.keys(details.value))
       delete details.value[key as keyof ScmDocumentDetails]
@@ -2260,6 +2335,8 @@
       header.value.documentTypeId = ''
       header.value.customerId = ''
       header.value.sourceId = ''
+      header.value.contractAttachments = []
+      attachmentContextKey.value = crypto.randomUUID()
       details.value.salespersonId = undefined
       details.value.salesperson = ''
       selectedSalesperson.value = []

@@ -721,7 +721,10 @@ function payload(input: ScmPurchaseWrite) {
     sourceId: input.sourceId,
     documentDate: input.documentDate,
     deliveryDate: input.deliveryDate,
-    details: input.details,
+    details:
+      input.kind === 'purchase_contract'
+        ? input.details
+        : omit(input.details, ['contractAttachments']),
     lines: input.lines.map((line) => toScmPurchaseLinePayload(line, input.kind)),
     paymentPlans: input.paymentPlans,
     deliveryPlans: input.deliveryPlans.map((plan) =>

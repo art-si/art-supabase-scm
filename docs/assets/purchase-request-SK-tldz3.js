@@ -1,0 +1,1 @@
+import{Sa as e,Xi as t,ia as n}from"./sys-DMwT2vNi.js";import{t as r}from"./purchase-workspace-BDJgDinf.js";var i=n({name:`ScmPurchaseRequest`,__name:`index`,setup(n){return(n,i)=>(e(),t(r,{kind:`purchase_request`}))}});export{i as default};

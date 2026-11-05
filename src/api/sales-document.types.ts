@@ -1,3 +1,5 @@
+import type { ScmContractAttachment } from './contract-attachment.types'
+
 export type ScmDocumentKind =
   | 'sales_quotation'
   | 'project_quotation'
@@ -27,6 +29,7 @@ export type ScmSalesOrderStatus =
   'DRAFT' | 'SUBM' | 'APRV' | 'PRUN' | 'PDEL' | 'FDEL' | 'CLSD' | 'CNCL'
 
 export interface ScmDocumentDetails {
+  contractAttachments?: ScmContractAttachment[]
   quotationScene?: 'standard' | 'project'
   title?: string
   paperContractNo?: string
