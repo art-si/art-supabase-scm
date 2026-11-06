@@ -1,6 +1,12 @@
 <template>
   <ArtDialog ref="dialogRef" size="xl">
-    <template #subtitle>维护单据表头、物料明细与履约安排；金额由数据库统一核算。</template>
+    <template #subtitle>
+      {{
+        kind === 'purchase_contract'
+          ? '维护合同基本信息、物料明细、付款安排与附件；金额由数据库统一核算。'
+          : '维护单据表头、物料明细与履约安排；金额由数据库统一核算。'
+      }}
+    </template>
     <div class="flex min-w-0 flex-col gap-4">
       <ElAlert v-if="initializationError" type="error" :closable="false" show-icon>
         <template #title>基础数据加载失败</template>
@@ -17,10 +23,27 @@
         title="当前租户暂无可用项目"
         description="采购单据需要关联项目。请在页头切换到有项目的业务租户后重新打开，或先在 MDM 主数据维护项目。"
       />
+      <ArtEntitySummary
+        v-if="kind === 'purchase_contract'"
+        :icon="config.icon"
+        :eyebrow="config.eyebrow"
+        :title="header.documentNo || details.title || '新采购合同'"
+        :description="purchaseContractSummary"
+      >
+        <template #aside>
+          <div class="text-right">
+            <div class="text-xs text-[var(--art-gray-600)]">预计价税合计</div>
+            <strong class="text-lg text-[var(--el-color-primary)]">{{
+              formatCurrencyValue(totalAmount)
+            }}</strong>
+          </div>
+        </template>
+      </ArtEntitySummary>
       <ArtForm
+        v-if="kind !== 'purchase_contract'"
         ref="headerFormRef"
         v-model="header"
-        :items="formItems"
+        :items="headerItems"
         :rules="headerRules"
         :validate-on-rule-change="false"
         :span="12"
@@ -29,26 +52,13 @@
         root-class="p-0! md:p-0!"
       >
         <template #layout="{ fields }">
-          <div class="flex min-w-0 flex-col gap-4">
-            <ArtSectionCard title="单据基本信息" subtitle="确定采购业务的项目、供应商与交付时间。">
-              <component :is="fields" :items="headerItems" :actions="false" />
-            </ArtSectionCard>
-            <component :is="fields" :items="attachmentItems" :actions="false" />
-          </div>
-        </template>
-        <template #contractAttachments>
-          <ScmContractAttachments
-            :key="attachmentContextKey"
-            ref="contractAttachmentsRef"
-            v-model="header.contractAttachments"
-            :tenant-id="header.tenantId"
-            :context-key="attachmentContextKey"
-            :readonly="!canEditContractAttachments"
-          />
+          <ArtSectionCard title="单据基本信息" subtitle="确定采购业务的项目、供应商与交付时间。">
+            <component :is="fields" :items="headerItems" :actions="false" />
+          </ArtSectionCard>
         </template>
       </ArtForm>
       <ArtSectionCard
-        v-if="config.fields.length"
+        v-if="config.fields.length && kind !== 'purchase_contract'"
         title="业务信息"
         subtitle="填写当前单据需要的补充信息。"
       >
@@ -56,6 +66,21 @@
         </ArtForm>
       </ArtSectionCard>
       <ElTabs v-model="activeTab" class="min-w-0">
+        <ElTabPane v-if="kind === 'purchase_contract'" name="base" label="单据信息">
+          <ArtSectionCard title="单据基本信息" subtitle="填写项目、供应商及合同签约信息。">
+            <ArtForm
+              ref="headerFormRef"
+              :model-value="contractFormModel"
+              :items="contractBaseItems"
+              :rules="contractRules"
+              :validate-on-rule-change="false"
+              :span="8"
+              :gutter="16"
+              label-position="top"
+              root-class="p-0! md:p-0!"
+            />
+          </ArtSectionCard>
+        </ElTabPane>
         <ElTabPane
           :label="
             kind === 'purchase_contract'
@@ -363,6 +388,16 @@
             ></ArtForm>
           </ArtSectionCard>
         </ElTabPane>
+        <ElTabPane v-if="kind === 'purchase_contract'" label="合同附件" name="attachments">
+          <ScmContractAttachments
+            :key="attachmentContextKey"
+            ref="contractAttachmentsRef"
+            v-model="header.contractAttachments"
+            :tenant-id="header.tenantId"
+            :context-key="attachmentContextKey"
+            :readonly="!canEditContractAttachments"
+          />
+        </ElTabPane>
       </ElTabs>
       <div
         class="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[var(--el-color-primary-light-9)] p-4 text-sm"
@@ -550,6 +585,7 @@
   import type { DataSelectColumn } from '@/components/core/forms/art-data-select/types'
   import ScmContractAttachments from '@scm/components/scm-contract-attachments.vue'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
+  import ArtEntitySummary from '@/components/core/surfaces/art-entity-summary/index.vue'
   import ArtTable, { type ArtTableExpose } from '@/components/core/tables/art-table/index.vue'
   import ArtIconButton from '@/components/core/widget/art-icon-button/index.vue'
   import ArtMaterialSelect from '@/components/business/art-material-select/index.vue'
@@ -668,12 +704,6 @@
           : 'ScmPurchaseContract:Add'
     )
   )
-  const attachmentItems = computed<FormItem[]>(() =>
-    kind.value === 'purchase_contract'
-      ? [{ key: 'contractAttachments', label: '', type: 'contractAttachmentTable', span: 24 }]
-      : []
-  )
-  const formItems = computed<FormItem[]>(() => [...headerItems.value, ...attachmentItems.value])
   const lineTableRef = ref<ArtTableExpose>()
   const kind = ref<ScmPurchaseKind>('purchase_contract')
   const taxRateOptions = useDictionaryOptions('scmTaxRate', Number)
@@ -783,6 +813,12 @@
   })
   const header = ref<HeaderModel>(emptyHeader())
   const details = ref<ScmPurchaseDetails>({})
+  const contractFormModel = computed(() => ({ header: header.value, details: details.value }))
+  const purchaseContractSummary = computed(() => {
+    const project = projects.value.find((item) => item.id === header.value.projectId)
+    const supplier = suppliers.value.find((item) => item.id === header.value.supplierId)
+    return `${project?.projectName || '未选择项目'} · ${supplier?.supplierName || '未选择供应商'}`
+  })
   const selectedEmployees = reactive<
     Record<'buyer' | 'applicant' | 'keeper', EmployeeIntegrationItem[]>
   >({ buyer: [], applicant: [], keeper: [] })
@@ -2448,6 +2484,31 @@
     })
   )
 
+  const contractBaseItems = computed<FormItem[]>(() => {
+    const headerFields = headerItems.value.filter((item) => item.type !== 'divider')
+    const remark = headerFields.find((item) => item.key === 'remark')
+    return [
+      ...headerFields
+        .filter((item) => item.key !== 'remark')
+        .map((item) => ({
+          ...item,
+          key: `header.${item.key}`,
+          span: item.span === 24 ? 24 : 8
+        })),
+      ...detailItems.value.map((item) => ({
+        ...item,
+        key: `details.${item.key}`,
+        span: item.span === 24 ? 24 : 8
+      })),
+      ...(remark ? [{ ...remark, key: 'header.remark', span: 24 }] : [])
+    ]
+  })
+  const contractRules = computed<FormRules>(() => {
+    const rules: FormRules = {}
+    for (const [key, value] of Object.entries(headerRules.value)) rules[`header.${key}`] = value
+    return rules
+  })
+
   async function loadReferences(tenantId: string): Promise<boolean> {
     const revision = ++referenceRevision
     initializationError.value = ''
@@ -3678,7 +3739,10 @@
       return false
     }
     try {
-      if (!(await validateArtFormForSubmit(headerFormRef.value))) return false
+      if (!(await validateArtFormForSubmit(headerFormRef.value))) {
+        if (kind.value === 'purchase_contract') activeTab.value = 'base'
+        return false
+      }
       const lineValidation = await lineTableRef.value?.validate()
       if (lineValidation && !lineValidation.valid) {
         activeTab.value = 'lines'
@@ -3869,7 +3933,7 @@
         ...item,
         id: options.copy ? crypto.randomUUID() : item.id
       })) ?? []
-    activeTab.value = 'lines'
+    activeTab.value = kind.value === 'purchase_contract' ? 'base' : 'lines'
     if (options.initialSource && options.kind === 'purchase_order') {
       header.value.sourceId = options.initialSource.id
       header.value.projectId = options.initialSource.projectId ?? ''

@@ -15,9 +15,10 @@
         @retry="loadReferences(header.tenantId)"
       />
       <ArtForm
+        v-if="kind !== 'sales_contract'"
         ref="headerFormRef"
         v-model="header"
-        :items="headerItems"
+        :items="baseHeaderItems"
         :rules="headerRules"
         :validate-on-rule-change="false"
         :span="12"
@@ -33,34 +34,12 @@
             >
               <component :is="fields" :items="baseHeaderItems" :actions="false" />
             </ArtSectionCard>
-            <component
-              :is="fields"
-              v-if="kind === 'sales_contract'"
-              :items="attachmentItems"
-              :actions="false"
-            />
           </div>
-        </template>
-        <template #contractAttachments>
-          <ScmContractAttachments
-            :key="attachmentContextKey"
-            ref="contractAttachmentsRef"
-            v-model="header.contractAttachments"
-            :tenant-id="header.tenantId"
-            :context-key="attachmentContextKey"
-            :readonly="
-              copyMode
-                ? !hasAuth('ScmSalesContract:Copy')
-                : recordId
-                  ? !hasAuth('ScmSalesContract:Edit')
-                  : !hasAuth('ScmSalesContract:Add')
-            "
-          />
         </template>
       </ArtForm>
 
       <ArtSectionCard
-        v-if="config.fields.length && kind !== 'project_quotation'"
+        v-if="config.fields.length && kind !== 'project_quotation' && kind !== 'sales_contract'"
         title="业务信息"
         subtitle="按当前单据类型填写日期、地址和执行信息。"
       >
@@ -88,7 +67,40 @@
         </p>
       </ArtSectionCard>
 
+      <ArtEntitySummary
+        v-if="kind === 'sales_contract'"
+        :icon="config.icon"
+        :eyebrow="config.eyebrow"
+        :title="header.documentNo || '新销售合同'"
+        :description="salesContractSummary"
+      >
+        <template #aside>
+          <div class="text-right">
+            <div class="text-xs text-[var(--art-gray-600)]">单据总价</div>
+            <strong class="text-lg text-[var(--el-color-primary)]">{{
+              formatCurrencyValue(previewTotal)
+            }}</strong>
+          </div>
+        </template>
+      </ArtEntitySummary>
       <ElTabs v-if="kind !== 'project_quotation'" v-model="activeTab" class="min-w-0">
+        <ElTabPane v-if="kind === 'sales_contract'" name="base" label="单据信息">
+          <div class="flex min-w-0 flex-col gap-4">
+            <ArtSectionCard title="单据基本信息" subtitle="填写合同归属、项目、客户及签约信息。">
+              <ArtForm
+                ref="contractFormRef"
+                :model-value="contractFormModel"
+                :items="contractBaseItems"
+                :rules="contractRules"
+                :validate-on-rule-change="false"
+                :span="8"
+                :gutter="16"
+                label-width="112px"
+                root-class="p-0! md:p-0!"
+              />
+            </ArtSectionCard>
+          </div>
+        </ElTabPane>
         <ElTabPane
           :label="
             kind === 'sales_contract'
@@ -364,6 +376,22 @@
             ></ArtForm>
           </ArtSectionCard>
         </ElTabPane>
+        <ElTabPane v-if="kind === 'sales_contract'" name="attachments" label="合同附件">
+          <ScmContractAttachments
+            :key="attachmentContextKey"
+            ref="contractAttachmentsRef"
+            v-model="header.contractAttachments"
+            :tenant-id="header.tenantId"
+            :context-key="attachmentContextKey"
+            :readonly="
+              copyMode
+                ? !hasAuth('ScmSalesContract:Copy')
+                : recordId
+                  ? !hasAuth('ScmSalesContract:Edit')
+                  : !hasAuth('ScmSalesContract:Add')
+            "
+          />
+        </ElTabPane>
       </ElTabs>
 
       <div
@@ -479,6 +507,7 @@
     DataSelectColumn
   } from '@/components/core/forms/art-data-select/types'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
+  import ArtEntitySummary from '@/components/core/surfaces/art-entity-summary/index.vue'
   import { useAuth } from '@/hooks/core/useAuth'
   import ScmContractAttachments from '../../../components/scm-contract-attachments.vue'
   import ArtAsyncState from '@/components/core/feedback/art-async-state/index.vue'
@@ -564,6 +593,7 @@
   const dialogRef = ref<ArtDialogExpose<OpenOptions>>()
   const shippingOrderPickerRef = ref<ArtDialogExpose>()
   const headerFormRef = ref<{ validate: () => Promise<boolean>; clearValidate: () => void }>()
+  const contractFormRef = ref<{ validate: () => Promise<boolean>; clearValidate: () => void }>()
   const contractAttachmentsRef = ref<{ hasPendingUpload: () => boolean }>()
   const detailsFormRef = ref<{ validate: () => Promise<boolean>; clearValidate: () => void }>()
   const quotationLineTableRef = ref<{
@@ -653,6 +683,12 @@
 
   const header = ref<HeaderModel>(initialHeader())
   const details = ref<ScmDocumentDetails>({})
+  const contractFormModel = computed(() => ({ header: header.value, details: details.value }))
+  const salesContractSummary = computed(() => {
+    const project = projectOptions.value.find((item) => item.id === header.value.projectId)
+    const customer = customerOptions.value.find((item) => item.id === header.value.customerId)
+    return `${project?.projectName || '未选择项目'} · ${customer?.customerName || '未选择客户'}`
+  })
   const lines = ref<ScmDocumentLine[]>([])
   const selectedShippingOrderId = ref('')
   interface ShippingLineChoice extends ScmDocumentLine {
@@ -837,7 +873,9 @@
   const baseHeaderItems = computed<FormItem[]>(() => [
     ...(shouldExposeTenantField.value
       ? [
-          { label: '数据归属', key: 'tenantSection', type: 'divider', span: 24 } as FormItem,
+          ...(kind.value === 'sales_contract'
+            ? []
+            : [{ label: '数据归属', key: 'tenantSection', type: 'divider', span: 24 } as FormItem]),
           {
             label: '所属租户',
             key: 'tenantId',
@@ -852,7 +890,9 @@
           } as FormItem
         ]
       : []),
-    { label: '单据', key: 'documentSection', type: 'divider', span: 24 },
+    ...(kind.value === 'sales_contract'
+      ? []
+      : [{ label: '单据', key: 'documentSection', type: 'divider', span: 24 } as FormItem]),
     {
       label: config.value.numberLabel,
       key: 'documentNo',
@@ -1007,24 +1047,6 @@
       span: 24,
       props: { type: 'textarea', rows: 2, maxlength: 500, showWordLimit: true }
     }
-  ])
-
-  const attachmentItems = computed<FormItem[]>(() =>
-    kind.value === 'sales_contract'
-      ? [
-          {
-            key: 'contractAttachments',
-            label: '',
-            type: 'slot',
-            span: 24,
-            labelWidth: '0px'
-          }
-        ]
-      : []
-  )
-  const headerItems = computed<FormItem[]>(() => [
-    ...baseHeaderItems.value,
-    ...attachmentItems.value
   ])
 
   const planForm = reactive({ details, paymentPlans, deliveryPlans, clauses })
@@ -1282,6 +1304,31 @@
                       }
     }))
   ])
+  const contractBaseItems = computed<FormItem[]>(() => {
+    const headerFields = baseHeaderItems.value.filter((item) => item.type !== 'divider')
+    const remark = headerFields.find((item) => item.key === 'remark')
+    return [
+      ...headerFields
+        .filter((item) => item.key !== 'remark')
+        .map((item) => ({
+          ...item,
+          key: `header.${item.key}`,
+          span: item.span === 24 ? 24 : 8
+        })),
+      ...detailItems.value.map((item) => ({
+        ...item,
+        key: `details.${item.key}`,
+        span: item.span === 24 ? 24 : 8
+      })),
+      ...(remark ? [{ ...remark, key: 'header.remark', span: 24 }] : [])
+    ]
+  })
+  const contractRules = computed<FormRules>(() => {
+    const rules: FormRules = {}
+    for (const [key, value] of Object.entries(headerRules.value)) rules[`header.${key}`] = value
+    for (const [key, value] of Object.entries(detailRules.value)) rules[`details.${key}`] = value
+    return rules
+  })
 
   async function loadReferences(tenantId: string): Promise<void> {
     const revision = ++referenceRevision
@@ -2114,18 +2161,34 @@
       return false
     }
     try {
-      if (!(await headerFormRef.value?.validate())) return false
+      const previousTab = activeTab.value
+      if (kind.value === 'sales_contract' && activeTab.value !== 'base') {
+        activeTab.value = 'base'
+        await nextTick()
+      }
+      if (
+        !(await (kind.value === 'sales_contract'
+          ? contractFormRef.value?.validate()
+          : headerFormRef.value?.validate()))
+      )
+        return false
       if (revision !== openRevision) return false
       if (
         kind.value !== 'project_quotation' &&
         config.value.fields.length &&
+        kind.value !== 'sales_contract' &&
         !(await detailsFormRef.value?.validate())
       )
         return false
       if (revision !== openRevision) return false
+      if (kind.value === 'sales_contract' && activeTab.value !== 'lines') {
+        activeTab.value = 'lines'
+        await nextTick()
+      }
       if (kind.value !== 'project_quotation' && !(await quotationLineTableRef.value?.validate()))
         return false
       if (revision !== openRevision) return false
+      if (kind.value === 'sales_contract') activeTab.value = previousTab
       if (config.value.useFees) {
         const feeValidation = await feeTableRef.value?.validate()
         if (revision !== openRevision) return false
@@ -2303,7 +2366,7 @@
         ...clause,
         id: options.copy ? crypto.randomUUID() : clause.id
       })) ?? []
-    activeTab.value = 'lines'
+    activeTab.value = kind.value === 'sales_contract' ? 'base' : 'lines'
     await nextTick()
     if (revision !== openRevision) return
     preparing = false
@@ -2319,6 +2382,7 @@
       onOpen: async () => {
         headerFormRef.value?.clearValidate()
         detailsFormRef.value?.clearValidate()
+        contractFormRef.value?.clearValidate()
         await loadReferences(header.value.tenantId)
         if (revision !== openRevision || referenceError.value) return
       },

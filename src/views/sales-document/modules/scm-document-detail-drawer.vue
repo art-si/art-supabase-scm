@@ -147,12 +147,22 @@
             </div>
           </ElTabPane>
           <ElTabPane
-            v-if="record.paymentPlans.length || record.deliveryPlans.length"
+            v-if="
+              record.kind === 'sales_contract' ||
+              record.paymentPlans.length ||
+              record.deliveryPlans.length
+            "
             name="plans"
-            label="履约计划"
+            :label="record.kind === 'sales_contract' ? '收款计划' : '履约计划'"
           >
             <div class="space-y-4">
-              <ArtSectionCard v-if="record.paymentPlans.length" title="收款计划">
+              <ArtSectionCard
+                v-if="record.kind === 'sales_contract' || record.paymentPlans.length"
+                title="收款计划"
+                :empty="!record.paymentPlans.length"
+                empty-title="暂无收款计划"
+                empty-description="此合同尚未编制收款计划。"
+              >
                 <div
                   v-for="plan in record.paymentPlans"
                   :key="plan.id"
@@ -177,8 +187,17 @@
               </ArtSectionCard>
             </div>
           </ElTabPane>
-          <ElTabPane v-if="record.clauses.length" name="clauses" label="合同条款">
-            <ArtSectionCard title="合同条款">
+          <ElTabPane
+            v-if="record.kind === 'sales_contract' || record.clauses.length"
+            name="clauses"
+            label="合同条款"
+          >
+            <ArtSectionCard
+              title="合同条款"
+              :empty="!record.clauses.length"
+              empty-title="暂无合同条款"
+              empty-description="此合同尚未填写合同条款。"
+            >
               <div
                 v-for="clause in record.clauses"
                 :key="clause.id"

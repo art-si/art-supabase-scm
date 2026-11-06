@@ -41,9 +41,12 @@
               </ArtSectionCard>
             </div>
           </ElTabPane>
-          <ElTabPane name="lines" label="物料明细">
+          <ElTabPane
+            name="lines"
+            :label="record.kind === 'purchase_contract' ? '合同明细' : '物料明细'"
+          >
             <ArtSectionCard
-              title="物料明细"
+              :title="record.kind === 'purchase_contract' ? '合同明细' : '物料明细'"
               :empty="!record.lines.length"
               empty-title="暂无明细"
               empty-description="单据录入物料后可在此核对数量与来源。"
@@ -164,12 +167,22 @@
             </ArtSectionCard>
           </ElTabPane>
           <ElTabPane
-            v-if="record.paymentPlans.length || record.deliveryPlans.length"
+            v-if="
+              record.kind === 'purchase_contract' ||
+              record.paymentPlans.length ||
+              record.deliveryPlans.length
+            "
             name="plans"
-            label="履约计划"
+            :label="record.kind === 'purchase_contract' ? '付款计划' : '履约计划'"
           >
             <div class="space-y-4">
-              <ArtSectionCard v-if="record.paymentPlans.length" title="付款计划">
+              <ArtSectionCard
+                v-if="record.kind === 'purchase_contract' || record.paymentPlans.length"
+                title="付款计划"
+                :empty="!record.paymentPlans.length"
+                empty-title="暂无付款计划"
+                empty-description="合同设置付款安排后可在此查看。"
+              >
                 <div
                   v-for="plan in record.paymentPlans"
                   :key="plan.id"
@@ -201,8 +214,17 @@
               </ArtSectionCard>
             </div>
           </ElTabPane>
-          <ElTabPane v-if="record.clauses.length" name="clauses" label="合同条款">
-            <ArtSectionCard title="合同条款">
+          <ElTabPane
+            v-if="record.kind === 'purchase_contract' || record.clauses.length"
+            name="clauses"
+            label="合同条款"
+          >
+            <ArtSectionCard
+              title="合同条款"
+              :empty="!record.clauses.length"
+              empty-title="暂无合同条款"
+              empty-description="合同添加条款后可在此查看。"
+            >
               <div
                 v-for="clause in record.clauses"
                 :key="clause.id"

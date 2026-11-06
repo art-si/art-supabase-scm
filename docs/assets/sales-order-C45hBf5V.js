@@ -1,1 +1,0 @@
-import{Sa as e,Xi as t,ia as n}from"./sys-DMwT2vNi.js";import{t as r}from"./scm-document-workspace-Bg77vqHF.js";var i=n({name:`ScmSalesOrder`,__name:`index`,setup(n){return(n,i)=>(e(),t(r,{kind:`sales_order`}))}});export{i as default};
