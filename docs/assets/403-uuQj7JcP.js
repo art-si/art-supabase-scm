@@ -1,0 +1,1 @@
+import{Ma as e,aa as t,pa as n}from"./sys-DRWTDML5.js";import{t as r}from"./art-permission-guard-CnCOPqLm.js";var i=n({name:`Exception403`,__name:`index`,setup(n){return(n,i)=>(e(),t(r,{"force-denied":``,"resource-name":`目标页面`,"show-relogin":``,"viewport-centered":``}))}});export{i as default};

@@ -66,7 +66,8 @@ export async function fetchScmSalesDeleteDependencies(selections: ScmSalesSelect
 export async function fetchScmQuoteLineAllocations(
   quotationIds: string[],
   targetKind: 'sales_contract' | 'sales_order',
-  excludeId?: string
+  excludeId?: string,
+  feedback: Pick<ApiFeedbackOptions, 'showErrorMessage'> = {}
 ): Promise<Map<string, number>> {
   if (!quotationIds.length) return new Map()
   const { data } = await responseHandle<
@@ -78,7 +79,11 @@ export async function fetchScmQuoteLineAllocations(
         p_target_kind: targetKind,
         p_exclude_id: excludeId || null
       }),
-    { breakReturn: true, showErrorMessage: true, errorMessage: '报价待转数量加载失败，请重试' }
+    {
+      breakReturn: true,
+      showErrorMessage: feedback.showErrorMessage ?? true,
+      errorMessage: '报价待转数量加载失败，请重试'
+    }
   )
   return new Map(
     (data ?? []).map((row) => [`${row.quotationId}:${row.lineId}`, Number(row.quantity)])

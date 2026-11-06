@@ -1,0 +1,1 @@
+import{Ma as e,aa as t,pa as n}from"./sys-DRWTDML5.js";import{t as r}from"./scm-document-workspace-CMvKQMLf.js";var i=n({name:`ScmLoading`,__name:`index`,setup(n){return(n,i)=>(e(),t(r,{kind:`loading`}))}});export{i as default};

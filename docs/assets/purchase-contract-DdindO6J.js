@@ -1,0 +1,1 @@
+import{Ma as e,aa as t,pa as n}from"./sys-DRWTDML5.js";import{t as r}from"./purchase-workspace-DpBmROZ1.js";var i=n({name:`ScmPurchaseContract`,__name:`index`,setup(n){return(n,i)=>(e(),t(r,{kind:`purchase_contract`,"prepayment-permission":`ScmPurchaseContract:Push`}))}});export{i as default};

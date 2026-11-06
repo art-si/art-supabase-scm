@@ -238,7 +238,11 @@
         <ElTabPane v-if="config.usePaymentPlans" label="收款计划" name="payments">
           <ArtSectionCard
             title="收款计划"
-            subtitle="选择按比例或按金额记录每期应收。"
+            :subtitle="
+              kind === 'sales_contract'
+                ? '可选填；未填完整会在保存后提醒。'
+                : '选择按比例或按金额记录每期应收。'
+            "
             :empty="!paymentPlans.length"
             empty-title="暂无收款计划"
             empty-description="添加计划后可记录每期应收。"
@@ -329,7 +333,11 @@
         <ElTabPane v-if="config.useClauses" label="合同条款" name="clauses">
           <ArtSectionCard
             title="合同条款"
-            subtitle="记录双方确认的条款标题与正文。"
+            :subtitle="
+              kind === 'sales_contract'
+                ? '可选填；未填完整会在保存后提醒。'
+                : '记录双方确认的条款标题与正文。'
+            "
             :empty="!clauses.length"
             empty-title="暂无合同条款"
             empty-description="添加条款后可填写标题与正文。"
@@ -465,7 +473,7 @@
 <script setup lang="tsx">
   import { ElButton } from 'element-plus'
   import { useUnitDisplayNames } from '@/hooks/core/useUnitDisplayNames'
-  import { cloneDeep, omit } from 'lodash-es'
+  import { cloneDeep, omit, uniq } from 'lodash-es'
   import dayjs from 'dayjs'
   import {
     ElCheckbox,
@@ -508,6 +516,7 @@
     fetchScmMaterialOptions,
     fetchScmLoadingChoices,
     fetchScmProjectOptions,
+    fetchScmQuoteLineAllocations,
     fetchScmRemainingSourceLines,
     fetchScmSalespersonOptions,
     fetchScmSourceOptions,
@@ -2097,7 +2106,12 @@
       activeTab.value = 'fees'
       return false
     }
-    if (paymentPlans.value.some((plan) => !plan.dueDate || plan.ratio < 0 || plan.amount < 0)) {
+    if (paymentPlans.value.some((plan) => plan.ratio < 0 || plan.ratio > 100 || plan.amount < 0)) {
+      ElMessage.warning('收款计划比例须在 0–100%，金额不能为负数')
+      activeTab.value = 'payments'
+      return false
+    }
+    if (kind.value !== 'sales_contract' && paymentPlans.value.some((plan) => !plan.dueDate)) {
       ElMessage.warning('请完整填写收款计划')
       activeTab.value = 'payments'
       return false
@@ -2110,19 +2124,74 @@
       return false
     }
     if (
+      kind.value === 'sales_contract' &&
       clauses.value.some(
         (clause) =>
-          !clause.title.trim() ||
-          !clause.content.trim() ||
-          (kind.value === 'sales_contract' &&
-            !clauseOptions.value.some((option) => option.value === clause.title))
+          clause.title.trim() &&
+          !clauseOptions.value.some((option) => option.value === clause.title)
       )
+    ) {
+      ElMessage.warning('请选择有效的合同条款')
+      activeTab.value = 'clauses'
+      return false
+    }
+    if (
+      kind.value !== 'sales_contract' &&
+      clauses.value.some((clause) => !clause.title.trim() || !clause.content.trim())
     ) {
       ElMessage.warning('请完整填写合同条款')
       activeTab.value = 'clauses'
       return false
     }
     return true
+  }
+
+  async function contractSaveReminders(): Promise<string[]> {
+    const reminders: string[] = []
+    const quotationQuantities = new Map<string, number>(
+      quotationDocuments.value.flatMap((document) =>
+        document.lines.map(
+          (line) => [`${document.id}:${line.lineId}`, Number(line.quantity)] as const
+        )
+      )
+    )
+    const sourcedQuantities = new Map<string, number>()
+    let missingQuotationBaseline = false
+    for (const line of lines.value) {
+      if (!line.sourceDocumentId || !line.sourceLineId) continue
+      const key = `${line.sourceDocumentId}:${line.sourceLineId}`
+      if (!quotationQuantities.has(key)) {
+        missingQuotationBaseline = true
+        continue
+      }
+      sourcedQuantities.set(key, (sourcedQuantities.get(key) ?? 0) + Number(line.quantity))
+    }
+    if (sourcedQuantities.size) {
+      try {
+        const allocations = await fetchScmQuoteLineAllocations(
+          uniq(
+            lines.value
+              .map((line) => line.sourceDocumentId)
+              .filter((id): id is string => Boolean(id))
+          ),
+          'sales_contract',
+          recordId.value || undefined,
+          { showErrorMessage: false }
+        )
+        const excessCount = [...sourcedQuantities].filter(
+          ([key, quantity]) =>
+            quantity + (allocations.get(key) ?? 0) > (quotationQuantities.get(key) ?? 0) + 0.0005
+        ).length
+        if (excessCount) reminders.push(`${excessCount} 行合同数量超过报价待转数量`)
+      } catch {
+        missingQuotationBaseline = true
+      }
+    }
+    if (missingQuotationBaseline) reminders.push('报价待转数量暂未核对，请稍后检查')
+    if (paymentPlans.value.some((plan) => !plan.dueDate)) reminders.push('收款计划尚未填完整')
+    if (clauses.value.some((clause) => !clause.title.trim() || !clause.content.trim()))
+      reminders.push('合同条款尚未填完整')
+    return reminders
   }
 
   async function handleSubmit(): Promise<boolean> {
@@ -2163,6 +2232,8 @@
       }
       if (revision !== openRevision || referencesLoading.value || referenceError.value) return false
       if (!validateDetails()) return false
+      const reminders = kind.value === 'sales_contract' ? await contractSaveReminders() : []
+      if (revision !== openRevision) return false
       if (kind.value === 'sales_contract' && contractAttachmentsRef.value?.hasPendingUpload()) {
         ElMessage.warning('合同附件仍在上传，请完成后再保存')
         return false
@@ -2217,6 +2288,8 @@
       else await createScmSalesDocument(cloneDeep(payload))
       if (revision !== openRevision) return false
       emit('success', submittingId ? 'edit' : 'add')
+      if (reminders.length)
+        ElMessage.warning({ message: `已保存。提醒：${reminders.join('；')}`, duration: 6000 })
       return true
     } catch {
       // API 边界已显示业务安全的错误，保留表单供用户修正。

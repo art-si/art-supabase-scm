@@ -1,0 +1,1 @@
+import{Ma as e,aa as t,pa as n}from"./sys-DRWTDML5.js";import{t as r}from"./scm-document-workspace-CMvKQMLf.js";var i=n({name:`ScmSalesOrder`,__name:`index`,setup(n){return(n,i)=>(e(),t(r,{kind:`sales_order`}))}});export{i as default};
