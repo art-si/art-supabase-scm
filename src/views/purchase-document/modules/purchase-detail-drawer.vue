@@ -30,23 +30,17 @@
         <ElTabs v-model="activeTab">
           <ElTabPane name="base" label="单据信息">
             <div class="space-y-4">
-              <ArtSectionCard title="单据信息" subtitle="单据归属、日期与当前状态。">
-                <ArtDescriptions :data="record" :items="headerItems" :columns="2" />
-              </ArtSectionCard>
-              <ArtSectionCard v-if="config.fields.length" title="业务信息">
-                <ArtDescriptions :data="record" :items="detailItems" :columns="2" />
+              <ArtSectionCard title="单据基本信息">
+                <ArtDescriptions :data="record" :items="documentItems" :columns="3" />
               </ArtSectionCard>
               <ArtSectionCard title="金额汇总">
                 <ArtDescriptions :data="record" :items="amountItems" :columns="3" />
               </ArtSectionCard>
             </div>
           </ElTabPane>
-          <ElTabPane
-            name="lines"
-            :label="record.kind === 'purchase_contract' ? '合同明细' : '物料明细'"
-          >
+          <ElTabPane name="lines" :label="lineSectionTitle">
             <ArtSectionCard
-              :title="record.kind === 'purchase_contract' ? '合同明细' : '物料明细'"
+              :title="lineSectionTitle"
               :empty="!record.lines.length"
               empty-title="暂无明细"
               empty-description="单据录入物料后可在此核对数量与来源。"
@@ -167,21 +161,16 @@
             </ArtSectionCard>
           </ElTabPane>
           <ElTabPane
-            v-if="
-              record.kind === 'purchase_contract' ||
-              record.paymentPlans.length ||
-              record.deliveryPlans.length
-            "
-            name="plans"
-            :label="record.kind === 'purchase_contract' ? '付款计划' : '履约计划'"
+            v-if="config.tabs.includes('payments') || record.paymentPlans.length"
+            name="payments"
+            label="付款计划"
           >
             <div class="space-y-4">
               <ArtSectionCard
-                v-if="record.kind === 'purchase_contract' || record.paymentPlans.length"
                 title="付款计划"
                 :empty="!record.paymentPlans.length"
                 empty-title="暂无付款计划"
-                empty-description="合同设置付款安排后可在此查看。"
+                empty-description="此单据尚未编制付款计划。"
               >
                 <div
                   v-for="plan in record.paymentPlans"
@@ -192,27 +181,38 @@
                   <strong>{{ plan.ratio }}% · {{ formatCurrencyValue(plan.amount) }}</strong></div
                 >
               </ArtSectionCard>
-              <ArtSectionCard v-if="record.deliveryPlans.length" title="交货计划">
-                <div
-                  v-for="plan in record.deliveryPlans"
-                  :key="plan.id"
-                  class="border-b border-[var(--el-border-color-lighter)] py-2 text-sm last:border-0"
-                >
-                  <strong>{{ plan.plannedDate }} · 计划 {{ plan.quantity }}</strong>
-                  <div class="mt-1 text-[var(--art-gray-600)]">
-                    基本数量 {{ plan.plannedBaseQuantity ?? plan.quantity }} · 已交货
-                    {{ plan.deliveredQuantity }} · 未交货
-                    {{ plan.remainingQuantity ?? plan.quantity }}
-                  </div>
-                  <div v-if="plan.recentDeliveryDate" class="mt-1 text-[var(--art-gray-600)]">
-                    最近交货 {{ plan.recentDeliveryDate }}
-                  </div>
-                  <div class="text-[var(--art-gray-600)]"
-                    >{{ plan.location }} {{ plan.address }}</div
-                  ></div
-                >
-              </ArtSectionCard>
             </div>
+          </ElTabPane>
+          <ElTabPane
+            v-if="config.tabs.includes('deliveries') || record.deliveryPlans.length"
+            name="deliveries"
+            label="交货计划"
+          >
+            <ArtSectionCard
+              title="交货计划"
+              :empty="!record.deliveryPlans.length"
+              empty-title="暂无交货计划"
+              empty-description="此单据尚未编制交货计划。"
+            >
+              <div
+                v-for="plan in record.deliveryPlans"
+                :key="plan.id"
+                class="border-b border-[var(--el-border-color-lighter)] py-2 text-sm last:border-0"
+              >
+                <strong>{{ plan.plannedDate }} · 计划 {{ plan.quantity }}</strong>
+                <div class="mt-1 text-[var(--art-gray-600)]">
+                  基本数量 {{ plan.plannedBaseQuantity ?? plan.quantity }} · 已交货
+                  {{ plan.deliveredQuantity }} · 未交货
+                  {{ plan.remainingQuantity ?? plan.quantity }}
+                </div>
+                <div v-if="plan.recentDeliveryDate" class="mt-1 text-[var(--art-gray-600)]">
+                  最近交货 {{ plan.recentDeliveryDate }}
+                </div>
+                <div class="text-[var(--art-gray-600)]"
+                  >{{ plan.location }} {{ plan.address }}</div
+                ></div
+              >
+            </ArtSectionCard>
           </ElTabPane>
           <ElTabPane
             v-if="record.kind === 'purchase_contract' || record.clauses.length"
@@ -264,7 +264,6 @@
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import { formatCurrencyValue } from '@/utils/ui/format'
   import { useUnitDisplayNames } from '@/hooks/core/useUnitDisplayNames'
-  import { useUserStore } from '@/store/modules/user'
   import {
     fetchScmMaterialOptions,
     fetchScmPurchaseDocument,
@@ -319,14 +318,22 @@
   const suggestedSuppliers = computed(() => detail.value?.suppliers ?? new Map<string, string>())
   let openRevision = 0
   const config = computed(() => purchaseConfigs[record.value.kind])
-  const userStore = useUserStore()
-  const headerItems: ArtDescriptionItem<ScmPurchaseDocument>[] = [
-    { key: 'documentNo', label: '单据编号', field: 'documentNo' },
+  const lineSectionTitle = computed(
+    () =>
+      ({
+        purchase_contract: '合同明细',
+        purchase_request: '申请明细',
+        purchase_order: '订单明细',
+        receipt_notice: '收料明细'
+      })[record.value.kind]
+  )
+  const headerItems = computed<ArtDescriptionItem<ScmPurchaseDocument>[]>(() => [
+    { key: 'documentNo', label: config.value.numberLabel, field: 'documentNo' },
     {
       key: 'status',
       label: '单据状态',
-      value: (row: ScmPurchaseDocument) =>
-        userStore.getDictLabelByValue('scmPurchaseStatus', row.status, '未识别状态')
+      field: 'status',
+      dictCode: 'scmPurchaseStatus'
     },
     {
       key: 'projectName',
@@ -358,9 +365,9 @@
       key: 'remark',
       label: '备注',
       value: (row: ScmPurchaseDocument) => row.remark || '--',
-      span: 2
+      span: 3
     }
-  ]
+  ])
   const detailItems = computed<ArtDescriptionItem<ScmPurchaseDocument>[]>(() =>
     config.value.fields.map((field) => ({
       key: field.key,
@@ -379,9 +386,14 @@
           return String(value ?? '--')
         return String(row.details[`${field.key}Name` as keyof typeof row.details] ?? value ?? '--')
       },
-      span: field.span === 24 ? 2 : 1
+      span: field.span === 24 ? 3 : 1
     }))
   )
+  const documentItems = computed(() => [
+    ...headerItems.value.filter((item) => item.key !== 'remark'),
+    ...detailItems.value,
+    ...headerItems.value.filter((item) => item.key === 'remark')
+  ])
   async function handleOpen(value: ScmPurchaseDocument): Promise<void> {
     activeTab.value = 'base'
     const revision = ++openRevision

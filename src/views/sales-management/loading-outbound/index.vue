@@ -22,7 +22,7 @@
         :api-fn="fetchPage"
         :columns-factory="columnsFactory"
         :header-actions="headerActions"
-        :search-bar-props="{ span: 6, labelWidth: 82, showExpand: true }"
+        :search-bar-props="{ span: 8, labelWidth: 82, showExpand: true }"
         :table-props="{
           rowKey: 'id',
           spanMethod: mergeDocumentCells,

@@ -44,7 +44,7 @@
         :import-context-key="importContextVersion"
         header-actions-placement="workspace"
         refresh-feedback="icon"
-        :search-bar-props="{ span: 6, labelWidth: 82, showExpand: true }"
+        :search-bar-props="{ span: 8, labelWidth: 82, showExpand: true }"
         :table-props="{
           rowKey: getDocumentDetailRowKey,
           spanMethod: mergeDocumentCells,

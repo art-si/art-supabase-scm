@@ -42,37 +42,29 @@
       <ArtForm
         v-if="kind !== 'purchase_contract'"
         ref="headerFormRef"
-        v-model="header"
-        :items="headerItems"
-        :rules="headerRules"
+        :model-value="documentFormModel"
+        :items="documentBaseItems"
+        :rules="documentRules"
         :validate-on-rule-change="false"
-        :span="12"
-        :gutter="20"
-        label-width="112px"
+        :span="8"
+        :gutter="16"
+        label-position="top"
         root-class="p-0! md:p-0!"
       >
         <template #layout="{ fields }">
           <ArtSectionCard title="单据基本信息" subtitle="确定采购业务的项目、供应商与交付时间。">
-            <component :is="fields" :items="headerItems" :actions="false" />
+            <component :is="fields" :items="documentBaseItems" :actions="false" />
           </ArtSectionCard>
         </template>
       </ArtForm>
-      <ArtSectionCard
-        v-if="config.fields.length && kind !== 'purchase_contract'"
-        title="业务信息"
-        subtitle="填写当前单据需要的补充信息。"
-      >
-        <ArtForm v-model="details" :items="detailItems" :span="12" :gutter="20" label-width="112px">
-        </ArtForm>
-      </ArtSectionCard>
       <ElTabs v-model="activeTab" class="min-w-0">
         <ElTabPane v-if="kind === 'purchase_contract'" name="base" label="单据信息">
           <ArtSectionCard title="单据基本信息" subtitle="填写项目、供应商及合同签约信息。">
             <ArtForm
               ref="headerFormRef"
-              :model-value="contractFormModel"
-              :items="contractBaseItems"
-              :rules="contractRules"
+              :model-value="documentFormModel"
+              :items="documentBaseItems"
+              :rules="documentRules"
               :validate-on-rule-change="false"
               :span="8"
               :gutter="16"
@@ -268,7 +260,7 @@
             <ArtForm
               :model-value="planForm"
               :items="paymentFormItems"
-              :span="6"
+              :span="8"
               :gutter="16"
               root-class="p-0! md:p-0!"
               ><template #paymentTable
@@ -325,7 +317,7 @@
               v-else
               :model-value="planForm"
               :items="deliveryFormItems"
-              :span="6"
+              :span="8"
               :gutter="16"
               root-class="p-0! md:p-0!"
               ><template
@@ -813,7 +805,7 @@
   })
   const header = ref<HeaderModel>(emptyHeader())
   const details = ref<ScmPurchaseDetails>({})
-  const contractFormModel = computed(() => ({ header: header.value, details: details.value }))
+  const documentFormModel = computed(() => ({ header: header.value, details: details.value }))
   const purchaseContractSummary = computed(() => {
     const project = projects.value.find((item) => item.id === header.value.projectId)
     const supplier = suppliers.value.find((item) => item.id === header.value.supplierId)
@@ -2072,7 +2064,6 @@
   const headerItems = computed<FormItem[]>(() => [
     ...(shouldExposeTenantField.value
       ? [
-          { label: '数据归属', key: 'tenantSection', type: 'divider', span: 24 } as FormItem,
           {
             label: '所属租户',
             key: 'tenantId',
@@ -2087,7 +2078,6 @@
           } as FormItem
         ]
       : []),
-    { label: '单据', key: 'documentSection', type: 'divider', span: 24 },
     {
       label: config.value.numberLabel,
       key: 'documentNo',
@@ -2484,7 +2474,7 @@
     })
   )
 
-  const contractBaseItems = computed<FormItem[]>(() => {
+  const documentBaseItems = computed<FormItem[]>(() => {
     const headerFields = headerItems.value.filter((item) => item.type !== 'divider')
     const remark = headerFields.find((item) => item.key === 'remark')
     return [
@@ -2503,7 +2493,7 @@
       ...(remark ? [{ ...remark, key: 'header.remark', span: 24 }] : [])
     ]
   })
-  const contractRules = computed<FormRules>(() => {
+  const documentRules = computed<FormRules>(() => {
     const rules: FormRules = {}
     for (const [key, value] of Object.entries(headerRules.value)) rules[`header.${key}`] = value
     return rules

@@ -17,14 +17,14 @@
       <ArtForm
         v-if="kind !== 'sales_contract'"
         ref="headerFormRef"
-        v-model="header"
-        :items="baseHeaderItems"
-        :rules="headerRules"
+        :model-value="documentFormModel"
+        :items="documentBaseItems"
+        :rules="documentRules"
         :validate-on-rule-change="false"
-        :span="12"
-        :gutter="20"
-        label-width="112px"
-        root-class="p-0!"
+        :span="8"
+        :gutter="16"
+        label-position="top"
+        root-class="p-0! md:p-0!"
       >
         <template #layout="{ fields }">
           <div class="flex min-w-0 flex-col gap-4">
@@ -32,29 +32,11 @@
               title="单据基本信息"
               subtitle="单据编号、项目和客户确定此单据的业务归属。"
             >
-              <component :is="fields" :items="baseHeaderItems" :actions="false" />
+              <component :is="fields" :items="documentBaseItems" :actions="false" />
             </ArtSectionCard>
           </div>
         </template>
       </ArtForm>
-
-      <ArtSectionCard
-        v-if="config.fields.length && kind !== 'project_quotation' && kind !== 'sales_contract'"
-        title="业务信息"
-        subtitle="按当前单据类型填写日期、地址和执行信息。"
-      >
-        <ArtForm
-          ref="detailsFormRef"
-          v-model="details"
-          :items="detailItems"
-          :rules="detailRules"
-          :validate-on-rule-change="false"
-          :span="12"
-          :gutter="20"
-          label-width="112px"
-        >
-        </ArtForm>
-      </ArtSectionCard>
 
       <ArtSectionCard
         v-if="kind === 'project_quotation'"
@@ -88,14 +70,14 @@
           <div class="flex min-w-0 flex-col gap-4">
             <ArtSectionCard title="单据基本信息" subtitle="填写合同归属、项目、客户及签约信息。">
               <ArtForm
-                ref="contractFormRef"
-                :model-value="contractFormModel"
-                :items="contractBaseItems"
-                :rules="contractRules"
+                ref="headerFormRef"
+                :model-value="documentFormModel"
+                :items="documentBaseItems"
+                :rules="documentRules"
                 :validate-on-rule-change="false"
                 :span="8"
                 :gutter="16"
-                label-width="112px"
+                label-position="top"
                 root-class="p-0! md:p-0!"
               />
             </ArtSectionCard>
@@ -270,7 +252,7 @@
             <ArtForm
               :model-value="planForm"
               :items="paymentFormItems"
-              :span="6"
+              :span="8"
               :gutter="16"
               root-class="p-0! md:p-0!"
               ><template #paymentTable
@@ -328,7 +310,7 @@
               v-else
               :model-value="planForm"
               :items="deliveryFormItems"
-              :span="6"
+              :span="8"
               :gutter="16"
               root-class="p-0! md:p-0!"
               ><template
@@ -593,9 +575,7 @@
   const dialogRef = ref<ArtDialogExpose<OpenOptions>>()
   const shippingOrderPickerRef = ref<ArtDialogExpose>()
   const headerFormRef = ref<{ validate: () => Promise<boolean>; clearValidate: () => void }>()
-  const contractFormRef = ref<{ validate: () => Promise<boolean>; clearValidate: () => void }>()
   const contractAttachmentsRef = ref<{ hasPendingUpload: () => boolean }>()
-  const detailsFormRef = ref<{ validate: () => Promise<boolean>; clearValidate: () => void }>()
   const quotationLineTableRef = ref<{
     validate: () => Promise<boolean>
     openSourcePicker: (kind: 'sales_quotation' | 'sales_contract') => Promise<void>
@@ -683,7 +663,7 @@
 
   const header = ref<HeaderModel>(initialHeader())
   const details = ref<ScmDocumentDetails>({})
-  const contractFormModel = computed(() => ({ header: header.value, details: details.value }))
+  const documentFormModel = computed(() => ({ header: header.value, details: details.value }))
   const salesContractSummary = computed(() => {
     const project = projectOptions.value.find((item) => item.id === header.value.projectId)
     const customer = customerOptions.value.find((item) => item.id === header.value.customerId)
@@ -873,9 +853,6 @@
   const baseHeaderItems = computed<FormItem[]>(() => [
     ...(shouldExposeTenantField.value
       ? [
-          ...(kind.value === 'sales_contract'
-            ? []
-            : [{ label: '数据归属', key: 'tenantSection', type: 'divider', span: 24 } as FormItem]),
           {
             label: '所属租户',
             key: 'tenantId',
@@ -890,9 +867,6 @@
           } as FormItem
         ]
       : []),
-    ...(kind.value === 'sales_contract'
-      ? []
-      : [{ label: '单据', key: 'documentSection', type: 'divider', span: 24 } as FormItem]),
     {
       label: config.value.numberLabel,
       key: 'documentNo',
@@ -1304,7 +1278,7 @@
                       }
     }))
   ])
-  const contractBaseItems = computed<FormItem[]>(() => {
+  const documentBaseItems = computed<FormItem[]>(() => {
     const headerFields = baseHeaderItems.value.filter((item) => item.type !== 'divider')
     const remark = headerFields.find((item) => item.key === 'remark')
     return [
@@ -1315,7 +1289,7 @@
           key: `header.${item.key}`,
           span: item.span === 24 ? 24 : 8
         })),
-      ...detailItems.value.map((item) => ({
+      ...(kind.value === 'project_quotation' ? [] : detailItems.value).map((item) => ({
         ...item,
         key: `details.${item.key}`,
         span: item.span === 24 ? 24 : 8
@@ -1323,10 +1297,12 @@
       ...(remark ? [{ ...remark, key: 'header.remark', span: 24 }] : [])
     ]
   })
-  const contractRules = computed<FormRules>(() => {
+  const documentRules = computed<FormRules>(() => {
     const rules: FormRules = {}
     for (const [key, value] of Object.entries(headerRules.value)) rules[`header.${key}`] = value
-    for (const [key, value] of Object.entries(detailRules.value)) rules[`details.${key}`] = value
+    if (kind.value !== 'project_quotation') {
+      for (const [key, value] of Object.entries(detailRules.value)) rules[`details.${key}`] = value
+    }
     return rules
   })
 
@@ -2166,20 +2142,7 @@
         activeTab.value = 'base'
         await nextTick()
       }
-      if (
-        !(await (kind.value === 'sales_contract'
-          ? contractFormRef.value?.validate()
-          : headerFormRef.value?.validate()))
-      )
-        return false
-      if (revision !== openRevision) return false
-      if (
-        kind.value !== 'project_quotation' &&
-        config.value.fields.length &&
-        kind.value !== 'sales_contract' &&
-        !(await detailsFormRef.value?.validate())
-      )
-        return false
+      if (!(await headerFormRef.value?.validate())) return false
       if (revision !== openRevision) return false
       if (kind.value === 'sales_contract' && activeTab.value !== 'lines') {
         activeTab.value = 'lines'
@@ -2381,8 +2344,6 @@
       onClose: invalidateOpen,
       onOpen: async () => {
         headerFormRef.value?.clearValidate()
-        detailsFormRef.value?.clearValidate()
-        contractFormRef.value?.clearValidate()
         await loadReferences(header.value.tenantId)
         if (revision !== openRevision || referenceError.value) return
       },
