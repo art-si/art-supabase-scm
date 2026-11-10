@@ -31,6 +31,8 @@ export type ProjectQuotationTab =
   | 'contracts'
   | 'purchase_requests'
   | 'purchase_orders'
+  | 'sales_orders'
+  | 'work_orders'
   | 'stock'
   | 'movements'
 
@@ -59,6 +61,8 @@ export interface ProjectQuotationRow {
   binName?: string | null
   batchNo?: string | null
   constructionNo?: string | null
+  plannedStartDate?: string | null
+  plannedEndDate?: string | null
   movementType?: string | null
   occurredAt?: string | null
   remark?: string | null
@@ -132,6 +136,8 @@ function isRow(value: unknown): value is ProjectQuotationRow {
       'binName',
       'batchNo',
       'constructionNo',
+      'plannedStartDate',
+      'plannedEndDate',
       'movementType',
       'occurredAt',
       'remark'

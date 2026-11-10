@@ -1,6 +1,12 @@
 <template>
-  <ArtDrawer :loading="loading" ref="drawerRef" size="xl" @close="closeDetail">
-    <div class="art-page-view flex min-w-0 flex-col gap-4">
+  <ArtDrawer
+    :loading="loading"
+    ref="drawerRef"
+    class="project-quotation-detail-drawer"
+    size="xl"
+    @close="closeDetail"
+  >
+    <div class="project-quotation-detail-layout art-page-view flex min-w-0 flex-col gap-4">
       <ArtEntitySummary
         icon="ri:briefcase-4-line"
         eyebrow="PROJECT QUOTATION"
@@ -97,6 +103,8 @@
     { key: 'contracts', label: '销售合同', permission: 'ScmSalesContract:View' },
     { key: 'purchase_requests', label: '采购申请', permission: 'ScmPurchaseRequest:View' },
     { key: 'purchase_orders', label: '采购订单', permission: 'ScmPurchaseOrder:View' },
+    { key: 'sales_orders', label: '销售订单', permission: 'ScmSalesOrder:View' },
+    { key: 'work_orders', label: '生产工单', permission: 'MesWorkOrder:View' },
     { key: 'stock', label: '实时库存', permission: 'WmsStock:View' },
     { key: 'movements', label: '库存流水', permission: 'WmsInventoryLedger:View' }
   ]
@@ -108,9 +116,13 @@
       ? '此项目尚无已保存的采购申请。'
       : activeTab.value === 'purchase_orders'
         ? '此项目尚无已提交的采购订单明细。'
-        : activeTab.value === 'stock'
-          ? '此项目当前没有库存结存。'
-          : '此项目暂无相关业务记录。'
+        : activeTab.value === 'sales_orders'
+          ? '此项目尚无已生效的销售订单明细。'
+          : activeTab.value === 'work_orders'
+            ? '此项目尚无生产工单。'
+            : activeTab.value === 'stock'
+              ? '此项目当前没有库存结存。'
+              : '此项目暂无相关业务记录。'
   )
   const {
     detail: profile,
@@ -145,7 +157,7 @@
       key: 'keyword',
       label: '查询',
       type: 'input',
-      props: { placeholder: '单号、分类、物料或仓库', clearable: true }
+      props: { placeholder: '单号、分类、物料、施工号或仓库', clearable: true }
     }
   ]
   async function fetchRows(query: ProjectQuotationQuery) {
@@ -162,7 +174,7 @@
         minWidth: 180,
         showOverflowTooltip: true
       })
-    if (tab !== 'stock' && tab !== 'movements')
+    if (tab !== 'stock' && tab !== 'movements' && tab !== 'work_orders')
       columns.push({
         prop: 'documentDate',
         label: '单据日期',
@@ -176,12 +188,17 @@
         minWidth: 160,
         showOverflowTooltip: true
       })
-    if (tab === 'quotation_lines' || tab === 'purchase_requests' || tab === 'purchase_orders')
+    if (
+      tab === 'quotation_lines' ||
+      tab === 'purchase_requests' ||
+      tab === 'purchase_orders' ||
+      tab === 'sales_orders'
+    )
       columns.push({ prop: 'lineNo', label: '行号', width: 72 })
     if (tab !== 'categories')
       columns.push({
         prop: 'materialDescription',
-        label: tab === 'contracts' ? '合同名称' : '物料描述',
+        label: tab === 'contracts' ? '合同名称' : tab === 'work_orders' ? '产品名称' : '物料描述',
         minWidth: 220,
         showOverflowTooltip: true
       })
@@ -191,10 +208,10 @@
         { prop: 'specification', label: '规格型号', minWidth: 145, showOverflowTooltip: true },
         { prop: 'brand', label: '品牌', minWidth: 110 }
       )
-    if (tab !== 'contracts')
+    if (tab !== 'contracts' && tab !== 'work_orders')
       columns.push({
         prop: 'quantity',
-        label: tab === 'stock' ? '结存数量' : '数量',
+        label: tab === 'stock' ? '结存数量' : tab === 'work_orders' ? '工单数量' : '数量',
         width: 115,
         align: 'right',
         formatter: (row) => formatCompactNumberValue(row.quantity, 3)
@@ -217,13 +234,14 @@
         align: 'right',
         formatter: (row) => formatSensitiveCurrencyValue(row.feeTotal, row.currency || 'CNY')
       })
-    columns.push({
-      prop: 'amount',
-      label: tab === 'categories' ? '报价总价' : '金额',
-      width: 145,
-      align: 'right',
-      formatter: (row) => formatSensitiveCurrencyValue(row.amount, row.currency || 'CNY')
-    })
+    if (tab !== 'work_orders')
+      columns.push({
+        prop: 'amount',
+        label: tab === 'categories' ? '报价总价' : '金额',
+        width: 145,
+        align: 'right',
+        formatter: (row) => formatSensitiveCurrencyValue(row.amount, row.currency || 'CNY')
+      })
     if (tab === 'categories' || tab === 'quotation_lines' || tab === 'contracts')
       columns.push({ prop: 'currency', label: '币种', width: 85 })
     if (tab === 'purchase_orders')
@@ -258,17 +276,43 @@
       tab === 'quotation_lines' ||
       tab === 'contracts' ||
       tab === 'purchase_requests' ||
-      tab === 'purchase_orders'
+      tab === 'purchase_orders' ||
+      tab === 'sales_orders' ||
+      tab === 'work_orders'
     )
       columns.push({
         prop: 'status',
         label: '状态',
         width: 105,
         dict: {
-          code: tab.startsWith('purchase') ? 'scmPurchaseStatus' : 'scmDocumentStatus',
+          code: tab.startsWith('purchase')
+            ? 'scmPurchaseStatus'
+            : tab === 'sales_orders'
+              ? 'scmSalesOrderStatus'
+              : tab === 'work_orders'
+                ? 'mesWorkOrderStatus'
+                : 'scmDocumentStatus',
           display: 'auto'
         }
       })
+    if (tab === 'work_orders')
+      columns.splice(
+        2,
+        0,
+        {
+          prop: 'plannedStartDate',
+          label: '计划开工',
+          width: 118,
+          formatter: (row) => formatDateTimeValue(row.plannedStartDate, { format: 'YYYY-MM-DD' })
+        },
+        {
+          prop: 'plannedEndDate',
+          label: '计划完工',
+          width: 118,
+          formatter: (row) => formatDateTimeValue(row.plannedEndDate, { format: 'YYYY-MM-DD' })
+        },
+        { prop: 'constructionNo', label: '施工号', minWidth: 125, showOverflowTooltip: true }
+      )
     columns.push({ prop: 'remark', label: '备注', minWidth: 180, showOverflowTooltip: true })
     return columns
   }
@@ -290,3 +334,46 @@
   }
   defineExpose({ handleOpen })
 </script>
+
+<style scoped lang="scss">
+  .project-quotation-detail-layout {
+    flex: 1 1 auto;
+    height: 100%;
+    min-height: 0;
+  }
+
+  :global(.project-quotation-detail-drawer .art-drawer__content) {
+    display: flex;
+    flex: 1 0 auto;
+    flex-direction: column;
+  }
+
+  :global(
+    .project-quotation-detail-drawer
+      .art-drawer__scrollbar
+      > .el-scrollbar__wrap
+      > .el-scrollbar__view
+  ) {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 100%;
+  }
+
+  :deep(.art-table-query) {
+    flex: 1 1 0;
+    height: 100%;
+    min-height: 0;
+  }
+
+  :deep(.art-table-query__table-host) {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+
+  :deep(.art-table-query__table-host > .art-table) {
+    flex: 1 1 0;
+    height: 100% !important;
+    min-height: 0;
+  }
+</style>
