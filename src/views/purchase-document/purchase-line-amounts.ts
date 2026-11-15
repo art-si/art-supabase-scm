@@ -1,4 +1,5 @@
 import type { ScmPurchaseKind, ScmPurchaseLine } from '@scm/api'
+import { calculateTaxInclusiveUnitPrice } from '@/utils/finance/unit-price'
 
 export function lineTotal(line: ScmPurchaseLine, kind: ScmPurchaseKind): number {
   return lineSubtotal(line, kind) + lineTaxAmount(line, kind)
@@ -58,8 +59,7 @@ export function lineTaxedUnitPrice(line: ScmPurchaseLine, kind: ScmPurchaseKind)
   if (kind === 'purchase_order')
     return Number(
       line.taxInclusiveUnitPrice ??
-        Math.round(Number(line.unitPrice || 0) * (1 + Number(line.taxRate || 0) / 100) * 10000) /
-          10000
+        calculateTaxInclusiveUnitPrice(Number(line.unitPrice || 0), Number(line.taxRate || 0))
     )
   return (
     Number(line.unitPrice || 0) *

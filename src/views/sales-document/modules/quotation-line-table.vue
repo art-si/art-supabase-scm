@@ -163,6 +163,7 @@
   import type { ColumnOption } from '@/types'
   import { formatCurrencyValue } from '@/utils/ui/format'
   import { normalizeStringList } from '@/utils/form/normalize'
+  import { calculateTaxExclusiveUnitPrice } from '@/utils/finance/unit-price'
   import {
     fetchScmOrderSourceAllocations,
     fetchScmQuoteLineAllocations,
@@ -175,7 +176,6 @@
     calculateContractLine,
     calculateQuotationLine,
     contractAuxiliaryQuantity,
-    quotationTaxExclusivePrice,
     quotationTaxInclusivePrice
   } from '../quotation-pricing'
 
@@ -463,7 +463,7 @@
     }
   }
   function updateInclusivePrice(line: ScmDocumentLine, price?: number): void {
-    line.unitPrice = quotationTaxExclusivePrice(price ?? 0, line.taxRate)
+    line.unitPrice = calculateTaxExclusiveUnitPrice(price ?? 0, line.taxRate)
   }
   function resetDiscount(line: ScmDocumentLine): void {
     if (!line.discountMode || line.discountMode === 'none') line.discountRate = 0

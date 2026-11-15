@@ -120,6 +120,7 @@
   import { formatCurrencyValue } from '@/utils/ui/format'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { getWmsMaterialUnitFactor } from '@/utils/wms/material-quantity'
+  import { calculateTaxInclusiveUnitPrice } from '@/utils/finance/unit-price'
   import {
     getDocumentDetailRowKey,
     documentGroupSpan,
@@ -1880,7 +1881,7 @@
         baseQuantity,
         unitPrice,
         taxRate,
-        taxInclusiveUnitPrice: Math.round(unitPrice * (1 + taxRate / 100) * 10000) / 10000,
+        taxInclusiveUnitPrice: calculateTaxInclusiveUnitPrice(unitPrice, taxRate),
         auxiliaryUnit: material.auxiliaryUnit || '',
         auxiliaryQuantity:
           material.auxiliaryUnitId && auxiliaryFactor

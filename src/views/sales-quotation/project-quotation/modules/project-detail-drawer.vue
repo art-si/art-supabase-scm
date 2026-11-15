@@ -211,7 +211,7 @@
     if (tab !== 'contracts' && tab !== 'work_orders')
       columns.push({
         prop: 'quantity',
-        label: tab === 'stock' ? '结存数量' : tab === 'work_orders' ? '工单数量' : '数量',
+        label: tab === 'stock' ? '结存数量' : '数量',
         width: 115,
         align: 'right',
         formatter: (row) => formatCompactNumberValue(row.quantity, 3)

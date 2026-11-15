@@ -1,16 +1,11 @@
 import type { ScmDocumentLine, ScmMaterialOption } from '@scm/api'
 import { getWmsMaterialUnitFactor } from '@/utils/wms/material-quantity'
+import { calculateTaxInclusiveUnitPrice } from '@/utils/finance/unit-price'
 
 const roundMoney = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100
-const roundUnitPrice = (value: number): number =>
-  Math.round((value + Number.EPSILON) * 10000) / 10000
 
 export function quotationTaxInclusivePrice(line: ScmDocumentLine): number {
-  return roundUnitPrice(line.unitPrice * (1 + line.taxRate / 100))
-}
-
-export function quotationTaxExclusivePrice(taxInclusivePrice: number, taxRate: number): number {
-  return roundUnitPrice(taxInclusivePrice / (1 + taxRate / 100))
+  return calculateTaxInclusiveUnitPrice(line.unitPrice, line.taxRate)
 }
 
 export function calculateQuotationLine(line: ScmDocumentLine) {

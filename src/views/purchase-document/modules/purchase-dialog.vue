@@ -551,6 +551,10 @@
   import ArtButtonMore from '@/components/core/forms/art-button-more/index.vue'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { getWmsMaterialUnitFactor } from '@/utils/wms/material-quantity'
+  import {
+    calculateTaxExclusiveUnitPrice,
+    calculateTaxInclusiveUnitPrice
+  } from '@/utils/finance/unit-price'
   import { useUnitDisplayNames } from '@/hooks/core/useUnitDisplayNames'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
@@ -1065,15 +1069,16 @@
   const lineTaxedUnitPrice = (line: ScmPurchaseLine): number =>
     purchaselineTaxedUnitPrice(line, kind.value)
   function updateTaxInclusiveUnitPrice(line: ScmPurchaseLine): void {
-    line.taxInclusiveUnitPrice =
-      Math.round(Number(line.unitPrice || 0) * (1 + Number(line.taxRate || 0) / 100) * 10000) /
-      10000
+    line.taxInclusiveUnitPrice = calculateTaxInclusiveUnitPrice(
+      Number(line.unitPrice || 0),
+      Number(line.taxRate || 0)
+    )
   }
   function updateUnitPriceFromTaxInclusive(line: ScmPurchaseLine): void {
-    line.unitPrice =
-      Math.round(
-        (Number(line.taxInclusiveUnitPrice || 0) / (1 + Number(line.taxRate || 0) / 100)) * 10000
-      ) / 10000
+    line.unitPrice = calculateTaxExclusiveUnitPrice(
+      Number(line.taxInclusiveUnitPrice || 0),
+      Number(line.taxRate || 0)
+    )
   }
 
   const paymentColumns = computed<ColumnOption<ScmPurchasePaymentPlan>[]>(() => [

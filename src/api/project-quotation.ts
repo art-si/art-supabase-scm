@@ -1,7 +1,7 @@
 import { useSupabase } from '@/hooks/core/useSupabase'
 import { isPlainObjectRecord } from '@/utils/type-guards'
 import { normalizeNullableText } from '@/utils/form/normalize'
-import { buildSupabasePageRange } from '@/utils/supabase/pagination'
+import { buildSupabasePageRange, decodeSupabaseRpcPage } from '@/utils/supabase/pagination'
 
 export interface ProjectQuotationSummary {
   id: string
@@ -152,16 +152,16 @@ function page<T>(
   value: unknown,
   validate: (row: unknown) => row is T
 ): { data: T[]; total: number; error: null } {
-  if (
-    !isPlainObjectRecord(value) ||
-    !Array.isArray(value.records) ||
-    !value.records.every(validate) ||
-    typeof value.total !== 'number' ||
-    !Number.isSafeInteger(value.total) ||
-    value.total < 0
+  const message = '项目报价响应格式异常，请刷新后重试'
+  const result = decodeSupabaseRpcPage(
+    value,
+    { page: message, total: message, row: message },
+    (row) => {
+      if (!validate(row)) throw new Error(message)
+      return row
+    }
   )
-    throw new Error('项目报价响应格式异常，请刷新后重试')
-  return { data: value.records, total: value.total, error: null }
+  return { ...result, error: null }
 }
 
 export async function fetchProjectQuotationProjects(query: ProjectQuotationQuery) {
