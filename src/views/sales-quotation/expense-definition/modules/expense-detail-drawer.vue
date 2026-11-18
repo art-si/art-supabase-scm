@@ -32,7 +32,6 @@
   import type { ArtDrawerExpose } from '@/components/core/drawers/art-drawer/types'
   import ArtEntitySummary from '@/components/core/surfaces/art-entity-summary/index.vue'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
-  import { formatWithDayjs } from '@/utils/time'
   import type { ScmQuoteExpense } from '@scm/api'
 
   defineOptions({ name: 'ScmQuoteExpenseDetailDrawer' })
@@ -80,16 +79,8 @@
       label: '文字颜色',
       value: (data: ScmQuoteExpense) => data.textColor || '跟随主题'
     },
-    {
-      key: 'createdAt',
-      label: '创建时间',
-      value: (data: ScmQuoteExpense) => formatWithDayjs(data.createdAt) || '--'
-    },
-    {
-      key: 'updatedAt',
-      label: '更新时间',
-      value: (data: ScmQuoteExpense) => formatWithDayjs(data.updatedAt) || '--'
-    }
+    { key: 'createdAt', label: '创建时间', field: 'createdAt', format: 'datetime' },
+    { key: 'updatedAt', label: '更新时间', field: 'updatedAt', format: 'datetime' }
   ]
 
   async function handleOpen(value: ScmQuoteExpense): Promise<void> {

@@ -30,8 +30,11 @@ export function selectedQuotationDocuments(
     .filter((record) => record.lines.length > 0)
 }
 
-export function normalizeQuotationSelection(
-  record: ScmSalesDocument | ScmSalesDocument[]
-): ScmSalesDocument[] {
-  return Array.isArray(record) ? record : [record]
+export function resolveSingleTenantQuotationSelection(
+  input: ScmSalesDocument | ScmSalesDocument[]
+) {
+  const records = Array.isArray(input) ? input : [input]
+  const [record] = records
+  if (!record || new Set(records.map((item) => item.tenantId)).size !== 1) return
+  return { record, records }
 }

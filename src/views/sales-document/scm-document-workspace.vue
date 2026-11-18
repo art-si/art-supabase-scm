@@ -124,7 +124,7 @@
   import {
     getDocumentDetailRowKey,
     expandDocumentLines,
-    documentGroupSpan,
+    createDocumentGroupSpan,
     loadAllDocumentPages,
     paginateDetailRows
   } from '@/utils/business/document-detail-list'
@@ -181,22 +181,11 @@
     'detailLine.unitPrice',
     'detailLine.taxRate'
   ])
-  function mergeDocumentCells({
-    rowIndex,
-    column
-  }: {
-    rowIndex: number
-    column: { property?: string }
-  }) {
-    return displayMode.value === 'line'
-      ? documentGroupSpan(
-          (tableRef.value?.dataState.rows.value as SalesListRow[] | undefined) ?? [],
-          rowIndex,
-          column.property,
-          lineProperties
-        )
-      : ([1, 1] as [number, number])
-  }
+  const mergeDocumentCells = createDocumentGroupSpan(
+    () => displayMode.value,
+    () => tableRef.value?.dataState.rows.value as readonly SalesListRow[] | undefined,
+    lineProperties
+  )
   const config = computed(() => scmDocumentConfigs[props.kind])
   const router = useRouter()
   const { confirmAction } = useArtFeedback()

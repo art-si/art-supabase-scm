@@ -36,6 +36,7 @@
       <ArtTableQuery
         ref="tableRef"
         v-model="search"
+        class="purchase-workspace-query"
         :search-items="searchItems"
         :api-fn="fetchPage"
         :columns-factory="columnsFactory"
@@ -44,7 +45,7 @@
         :import-context-key="importContextVersion"
         header-actions-placement="workspace"
         refresh-feedback="icon"
-        :search-bar-props="{ span: 8, labelWidth: 82, showExpand: true }"
+        :search-bar-props="{ span: 8, labelWidth: 'var(--scm-purchase-query-label-width, 82px)' }"
         :table-props="{
           rowKey: getDocumentDetailRowKey,
           spanMethod: mergeDocumentCells,
@@ -57,8 +58,7 @@
               : `暂无${config.title}。创建单据后可继续维护物料与状态。`
         }"
         focusable
-      >
-      </ArtTableQuery>
+      />
       <PurchaseDialog ref="dialogRef" @success="handleSaved" />
       <PurchaseDetailDrawer ref="drawerRef" />
       <SettlementDocumentDrawer
@@ -123,7 +123,7 @@
   import { calculateTaxInclusiveUnitPrice } from '@/utils/finance/unit-price'
   import {
     getDocumentDetailRowKey,
-    documentGroupSpan,
+    createDocumentGroupSpan,
     expandDocumentLines,
     loadAllDocumentPages,
     paginateDetailRows
@@ -178,24 +178,11 @@
     'detailLine.sourceDocumentNo',
     'detailLine.sourceLineNo'
   ])
-  function mergeDocumentCells({
-    rowIndex,
-    column
-  }: {
-    rowIndex: number
-    column: { property?: string }
-  }) {
-    return displayMode.value === 'line'
-      ? column.property
-        ? documentGroupSpan(
-            (tableRef.value?.dataState.rows.value as PurchaseListRow[] | undefined) ?? [],
-            rowIndex,
-            column.property,
-            lineProperties
-          )
-        : ([1, 1] as [number, number])
-      : ([1, 1] as [number, number])
-  }
+  const mergeDocumentCells = createDocumentGroupSpan(
+    () => displayMode.value,
+    () => tableRef.value?.dataState.rows.value as readonly PurchaseListRow[] | undefined,
+    lineProperties
+  )
   const config = computed(() => purchaseConfigs[props.kind])
   const { confirmAction } = useArtFeedback()
   const { hasAuth } = useAuth()
@@ -458,7 +445,7 @@
       label: '组合查询',
       key: 'keyword',
       type: 'input',
-      props: { clearable: true, placeholder: `${config.value.numberLabel}、项目、供应商或人员` }
+      props: { clearable: true, placeholder: '单号/项目/供应商/人员' }
     },
     {
       label: '单据状态',
@@ -1928,3 +1915,12 @@
     )
   }
 </script>
+
+<style scoped lang="scss">
+  @media (width <= 360px) {
+    .purchase-workspace-query :deep(.art-search-bar) {
+      --scm-purchase-query-label-width: 64px;
+      --art-section-padding: var(--art-space-2);
+    }
+  }
+</style>

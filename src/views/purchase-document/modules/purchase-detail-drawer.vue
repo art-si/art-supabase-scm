@@ -27,7 +27,7 @@
             ></template
           >
         </ArtEntitySummary>
-        <ElTabs v-model="activeTab">
+        <ElTabs v-model="activeTab" class="art-card-xs art-overlay-tab-card">
           <ElTabPane name="base" label="单据信息">
             <div class="space-y-4">
               <ArtSectionCard title="单据基本信息">

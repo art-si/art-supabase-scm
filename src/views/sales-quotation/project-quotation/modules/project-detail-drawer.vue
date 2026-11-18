@@ -17,43 +17,52 @@
           ><ElTag>{{ selected?.quotationCount || 0 }} 次审批报价</ElTag></template
         >
       </ArtEntitySummary>
-      <ElTabs v-model="activeTab" class="min-w-0" aria-label="项目业务资料">
-        <ElTabPane label="项目详细资料" name="profile" />
-        <ElTabPane v-for="tab in tabs" :key="tab.key" :label="tab.label" :name="tab.key" />
-      </ElTabs>
-      <ArtSectionCard
-        v-if="activeTab === 'profile'"
-        title="项目详细资料"
-        subtitle="项目主数据与审批报价关联资料。"
-        :error="loadError"
-        :empty="missing"
-        empty-title="暂无项目资料"
-        empty-description="请返回项目报价列表刷新后重新选择；如需补充资料，请到项目管理维护。"
-        error-title="项目资料加载失败"
-        @retry="retryLoad"
+      <ElTabs
+        v-model="activeTab"
+        class="art-card-xs art-overlay-tab-card"
+        aria-label="项目业务资料"
       >
-        <ArtDescriptions v-if="profile" :data="profile" :items="profileItems" :columns="2" />
-      </ArtSectionCard>
-      <ArtEmptyState
-        v-else-if="!canReadTab"
-        title="暂无此页签的查看权限"
-        description="请联系管理员分配对应业务的查看权限后重试。"
-      />
-      <ArtTableQuery
-        v-else-if="selected"
-        :key="`${selected.id}:${activeTab}`"
-        v-model="tabSearch"
-        :api-fn="fetchRows"
-        :columns-factory="columnsFactory"
-        :search-items="tabSearchItems"
-        :search-bar-props="{ span: 12, labelWidth: 70, showExpand: false }"
-        :table-props="{
-          rowKey: 'id',
-          tableLayout: 'fixed',
-          emptyText: `暂无${activeLabel}`,
-          emptyDescription: emptyDescription
-        }"
-      />
+        <ElTabPane label="项目详细资料" name="profile">
+          <ArtSectionCard
+            v-if="activeTab === 'profile'"
+            class="min-h-0 flex-1"
+            title="项目详细资料"
+            subtitle="项目主数据与审批报价关联资料。"
+            :error="loadError"
+            :empty="missing"
+            empty-title="暂无项目资料"
+            empty-description="请返回项目报价列表刷新后重新选择；如需补充资料，请到项目管理维护。"
+            error-title="项目资料加载失败"
+            @retry="retryLoad"
+          >
+            <ArtDescriptions v-if="profile" :data="profile" :items="profileItems" :columns="2" />
+          </ArtSectionCard>
+        </ElTabPane>
+        <ElTabPane v-for="tab in tabs" :key="tab.key" :label="tab.label" :name="tab.key">
+          <template v-if="activeTab === tab.key">
+            <ArtEmptyState
+              v-if="!canReadTab"
+              title="暂无此页签的查看权限"
+              description="请联系管理员分配对应业务的查看权限后重试。"
+            />
+            <ArtTableQuery
+              v-else-if="selected"
+              :key="`${selected.id}:${activeTab}`"
+              v-model="tabSearch"
+              :api-fn="fetchRows"
+              :columns-factory="columnsFactory"
+              :search-items="tabSearchItems"
+              :search-bar-props="{ span: 12, labelWidth: 70, showExpand: false }"
+              :table-props="{
+                rowKey: 'id',
+                tableLayout: 'fixed',
+                emptyText: `暂无${activeLabel}`,
+                emptyDescription: emptyDescription
+              }"
+            />
+          </template>
+        </ElTabPane>
+      </ElTabs>
     </div>
   </ArtDrawer>
 </template>
@@ -340,6 +349,33 @@
     flex: 1 1 auto;
     height: 100%;
     min-height: 0;
+
+    > :deep(.art-entity-summary) {
+      flex: none;
+    }
+
+    > :deep(.el-tabs) {
+      flex: 1 1 0;
+      min-height: 0;
+
+      > .el-tabs__header {
+        flex: none;
+      }
+
+      > .el-tabs__content {
+        display: flex;
+        flex: 1 1 0;
+        flex-direction: column;
+        min-height: 0;
+
+        > .el-tab-pane {
+          display: flex;
+          flex: 1 1 0;
+          flex-direction: column;
+          min-height: 0;
+        }
+      }
+    }
   }
 
   :global(.project-quotation-detail-drawer .art-drawer__content) {
@@ -358,22 +394,5 @@
     flex-direction: column;
     height: 100%;
     min-height: 100%;
-  }
-
-  :deep(.art-table-query) {
-    flex: 1 1 0;
-    height: 100%;
-    min-height: 0;
-  }
-
-  :deep(.art-table-query__table-host) {
-    flex: 1 1 0;
-    min-height: 0;
-  }
-
-  :deep(.art-table-query__table-host > .art-table) {
-    flex: 1 1 0;
-    height: 100% !important;
-    min-height: 0;
   }
 </style>

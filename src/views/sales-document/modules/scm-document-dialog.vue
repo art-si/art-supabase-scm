@@ -65,7 +65,11 @@
           </div>
         </template>
       </ArtEntitySummary>
-      <ElTabs v-if="kind !== 'project_quotation'" v-model="activeTab" class="min-w-0">
+      <ElTabs
+        v-if="kind !== 'project_quotation'"
+        v-model="activeTab"
+        class="art-card-xs art-overlay-tab-card"
+      >
         <ElTabPane v-if="kind === 'sales_contract'" name="base" label="单据信息">
           <div class="flex min-w-0 flex-col gap-4">
             <ArtSectionCard title="单据基本信息" subtitle="填写合同归属、项目、客户及签约信息。">
@@ -411,7 +415,12 @@
       </div>
     </div>
   </ArtDialog>
-  <ArtDialog ref="shippingOrderPickerRef" size="xl">
+  <ArtDialog
+    ref="shippingOrderPickerRef"
+    size="xl"
+    :confirm-disabled="shippingOrderLoading || Boolean(shippingOrderError)"
+    @close="invalidateShippingOrderPicker"
+  >
     <div class="flex min-w-0 flex-col gap-3">
       <p class="text-sm text-[var(--art-gray-600)]"
         >选择一张销售订单，再勾选需要发货的明细。已添加的来源行不会重复显示。</p
@@ -432,19 +441,27 @@
           :label="order.documentNo"
         />
       </ElSelect>
-      <ArtTable
-        :data="availableShippingLines"
-        :columns="shippingOrderColumns"
-        :pagination="false"
-        :loading="shippingOrderLoading"
-        :height="Math.min(420, 88 + availableShippingLines.length * 48)"
-        :scrollbar-always-on="false"
-        row-key="lineId"
-        border
-        empty-text="暂无可选的订单明细"
-        empty-description="请选择订单，或检查该订单是否还有待发货数量。"
-        @selection-change="selectedShippingLines = $event"
-      />
+      <ArtAsyncState
+        :error="shippingOrderError"
+        error-title="订单剩余明细加载失败"
+        :min-height="0"
+        size="compact"
+        @retry="loadShippingOrderLines(selectedShippingOrderId)"
+      >
+        <ArtTable
+          :data="availableShippingLines"
+          :columns="shippingOrderColumns"
+          :pagination="false"
+          :loading="shippingOrderLoading"
+          :height="Math.min(420, 88 + availableShippingLines.length * 48)"
+          :scrollbar-always-on="false"
+          row-key="lineId"
+          border
+          empty-text="暂无可选的订单明细"
+          empty-description="请选择订单，或检查该订单是否还有待发货数量。"
+          @selection-change="selectedShippingLines = $event"
+        />
+      </ArtAsyncState>
       <p class="text-xs text-[var(--art-gray-600)]"
         >已选 {{ selectedShippingLines.length }} 行 · 最多 200 行</p
       >
@@ -501,6 +518,7 @@
   import { useAuth } from '@/hooks/core/useAuth'
   import ScmContractAttachments from '../../../components/scm-contract-attachments.vue'
   import ArtAsyncState from '@/components/core/feedback/art-async-state/index.vue'
+  import { useArtOverlaySession } from '@/hooks/core/useArtOverlay'
   import ArtTable, { type ArtTableExpose } from '@/components/core/tables/art-table/index.vue'
   import ArtIconButton from '@/components/core/widget/art-icon-button/index.vue'
   import type { ColumnOption } from '@/types'
@@ -592,6 +610,7 @@
   const feeTableRef = ref<ArtTableExpose>()
   const kind = ref<ScmDocumentKind>('sales_quotation')
   const config = computed(() => scmDocumentConfigs[kind.value])
+  const generatesDocumentNo = computed(() => kind.value !== 'project_quotation')
   const recordId = ref<string>()
   const copyMode = ref(false)
   const tenantOptions = ref<OpenOptions['tenantOptions']>([])
@@ -629,6 +648,7 @@
   const materialOptions = ref<ScmMaterialOption[]>([])
   const expenseOptions = ref<ScmQuoteExpense[]>([])
   const documentTypeOptions = ref<ScmDocumentTypeOption[]>([])
+  const documentTypeLookupCompleted = ref(false)
   const sourceOptions = ref<ScmSalesDocument[]>([])
   const engineeringReferences = reactive<ScmEngineeringReferenceOptions>({
     categories: [],
@@ -638,6 +658,15 @@
   })
   const referencesLoading = ref(false)
   const referenceError = ref<Error | null>(null)
+  const documentTypeUnavailable = computed(
+    () =>
+      documentTypeLookupCompleted.value &&
+      !referencesLoading.value &&
+      !referenceError.value &&
+      Boolean(header.value.tenantId) &&
+      !header.value.documentTypeId &&
+      !documentTypeOptions.value.length
+  )
   const activeTab = ref('lines')
   const attachmentContextKey = ref(crypto.randomUUID())
   let loadingSeed: { source: ScmSalesDocument; lineIds?: string[] } | undefined
@@ -646,9 +675,11 @@
   let openRevision = 0
   const route = useRoute()
   function invalidateOpen(): void {
+    invalidateShippingOrderPicker()
     loadingSeed = undefined
     openRevision += 1
     referenceRevision += 1
+    documentTypeLookupCompleted.value = false
     referencesLoading.value = false
     referenceError.value = null
   }
@@ -687,7 +718,12 @@
   const availableShippingLines = ref<ShippingLineChoice[]>([])
   const selectedShippingLines = ref<ShippingLineChoice[]>([])
   const shippingOrderLoading = ref(false)
-  let shippingOrderRevision = 0
+  const shippingOrderError = shallowRef<Error | null>(null)
+  const shippingOrderSession = useArtOverlaySession(
+    () =>
+      Boolean(unref(shippingOrderPickerRef.value?.visible)) &&
+      Boolean(unref(dialogRef.value?.visible))
+  )
   const shippingOrderOptions = computed(() =>
     sourceOptions.value.filter(
       (order) =>
@@ -814,9 +850,7 @@
   const headerRules = computed<FormRules<HeaderModel>>(() => ({
     tenantId: [{ required: true, message: '请选择所属租户', trigger: 'change' }],
     documentNo:
-      ['sales_quotation', 'sales_contract', 'sales_order', 'shipping_notice', 'loading'].includes(
-        kind.value
-      ) && !recordId.value
+      generatesDocumentNo.value && !recordId.value
         ? []
         : [
             { required: true, message: '请输入单据编号', trigger: 'blur' },
@@ -882,28 +916,17 @@
       type: 'input',
       props: {
         maxlength: 60,
-        disabled: [
-          'sales_quotation',
-          'sales_contract',
-          'sales_order',
-          'shipping_notice',
-          'loading'
-        ].includes(kind.value),
-        placeholder: [
-          'sales_quotation',
-          'sales_contract',
-          'sales_order',
-          'shipping_notice',
-          'loading'
-        ].includes(kind.value)
-          ? '保存后按月度编号规则自动生成'
-          : undefined
+        disabled: generatesDocumentNo.value,
+        placeholder: generatesDocumentNo.value ? '保存后按月度编号规则自动生成' : undefined
       }
     },
     {
       label: '单据类型',
       key: 'documentTypeId',
       type: 'select',
+      description: documentTypeUnavailable.value
+        ? `在 MDM 启用单据类型，并关联「${config.value.title}」。`
+        : undefined,
       props: {
         options: documentTypeOptions.value.map((item) => ({
           label: item.documentTypeName,
@@ -912,11 +935,8 @@
         filterable: true,
         clearable: true,
         loading: referencesLoading.value,
-        noDataText:
-          kind.value === 'shipping_notice'
-            ? '请先在 MDM 单据类型中配置发货通知单类型'
-            : '暂无可用单据类型',
-        placeholder: '按 MDM 单据类型配置参选'
+        noDataText: '暂无可用单据类型',
+        placeholder: documentTypeUnavailable.value ? '暂无可用类型' : '请选择单据类型'
       }
     },
     {
@@ -1323,6 +1343,7 @@
     materialOptions.value = []
     expenseOptions.value = []
     documentTypeOptions.value = []
+    documentTypeLookupCompleted.value = false
     sourceOptions.value = []
     quotationDocuments.value = []
     contractDocuments.value = []
@@ -1407,6 +1428,8 @@
       materialOptions.value = materials.data ?? []
       expenseOptions.value = expenses.data ?? []
       documentTypeOptions.value = types.data ?? []
+      // Menu lookup can return an empty result before the document type query runs.
+      documentTypeLookupCompleted.value = 'error' in types && !types.error
       if (!recordId.value && !header.value.documentTypeId) {
         header.value.documentTypeId =
           documentTypeOptions.value.find((item) => item.isDefault)?.id ?? ''
@@ -1838,16 +1861,28 @@
     clauses.value.push({ id: crypto.randomUUID(), title: '', content: '' })
   }
 
+  function invalidateShippingOrderPicker(): void {
+    shippingOrderSession.invalidate()
+    shippingOrderLoading.value = false
+    shippingOrderError.value = null
+  }
+
   async function loadShippingOrderLines(orderId: string): Promise<void> {
-    const revision = ++shippingOrderRevision
+    const revision = shippingOrderSession.invalidate()
+    const documentRevision = openRevision
+    shippingOrderError.value = null
     selectedShippingLines.value = []
     availableShippingLines.value = []
     const source = shippingOrderOptions.value.find((item) => item.id === orderId)
-    if (!source) return
+    if (!source) {
+      shippingOrderLoading.value = false
+      shippingOrderPickerRef.value?.setLoading(false)
+      return
+    }
     shippingOrderLoading.value = true
     try {
       const remaining = await fetchScmRemainingSourceLines(source)
-      if (revision !== shippingOrderRevision) return
+      if (!shippingOrderSession.isCurrent(revision) || documentRevision !== openRevision) return
       availableShippingLines.value = remaining
         .filter((line) => !lines.value.some((existing) => existing.sourceLineId === line.lineId))
         .map((line) => {
@@ -1862,11 +1897,16 @@
             baseUnit: line.baseUnit || sourceLine?.baseUnit || ''
           }
         })
-    } catch {
-      if (revision === shippingOrderRevision)
-        ElMessage.warning('订单剩余数量加载失败，请重新选择订单')
+    } catch (cause) {
+      if (shippingOrderSession.isCurrent(revision) && documentRevision === openRevision)
+        shippingOrderError.value = new Error('请重新加载订单剩余明细，当前订单和已填写内容会保留', {
+          cause
+        })
     } finally {
-      if (revision === shippingOrderRevision) shippingOrderLoading.value = false
+      if (shippingOrderSession.isCurrent(revision) && documentRevision === openRevision) {
+        shippingOrderLoading.value = false
+        shippingOrderPickerRef.value?.setLoading(false)
+      }
     }
   }
 
@@ -1879,6 +1919,7 @@
       ElMessage.warning('当前项目和客户暂无可发货的销售订单')
       return
     }
+    invalidateShippingOrderPicker()
     selectedShippingOrderId.value = header.value.sourceId || ''
     selectedShippingLines.value = []
     availableShippingLines.value = []
@@ -1887,16 +1928,12 @@
       confirmText: '添加所选明细',
       loading: Boolean(selectedShippingOrderId.value),
       loadingText: '正在加载订单剩余明细…',
-      onOpen: async (_data, api) => {
-        try {
-          if (selectedShippingOrderId.value) {
-            await loadShippingOrderLines(selectedShippingOrderId.value)
-          }
-        } finally {
-          api.setLoading(false)
-        }
-      },
+      onOpen: () =>
+        selectedShippingOrderId.value
+          ? loadShippingOrderLines(selectedShippingOrderId.value)
+          : undefined,
       onConfirm: () => {
+        if (shippingOrderLoading.value || shippingOrderError.value) return false
         const source = shippingOrderOptions.value.find(
           (item) => item.id === selectedShippingOrderId.value
         )

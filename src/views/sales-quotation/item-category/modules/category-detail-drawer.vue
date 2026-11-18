@@ -14,7 +14,11 @@
         </template>
       </ArtEntitySummary>
 
-      <ElTabs v-if="record.feeItems.length" v-model="activeTab">
+      <ElTabs
+        v-if="record.feeItems.length"
+        v-model="activeTab"
+        class="art-card-xs art-overlay-tab-card"
+      >
         <ElTabPane name="quotation" label="项目与报价">
           <ArtSectionCard title="项目与报价" subtitle="价格与数量由报价项维护，总价由系统核算。">
             <ArtDescriptions :data="record" :items="descriptionItems" :columns="2" />

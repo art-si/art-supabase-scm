@@ -1,0 +1,1 @@
+import{an as e,sn as t}from"./sys-hO1PIVNn.js";var n=(n,r)=>(r?.readTenantId!==void 0&&(r.readTenantId!==null&&e(r.readTenantId),n=n.setHeader(t(),r.readTenantId??``)),r?.signal?n.abortSignal(r.signal):n);export{n as t};

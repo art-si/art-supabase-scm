@@ -43,7 +43,7 @@
   import {
     quotationActionLines,
     selectedQuotationDocuments,
-    normalizeQuotationSelection,
+    resolveSingleTenantQuotationSelection,
     type QuotationActionLine
   } from '../quotation-selection'
   import type { ArtTableExpose } from '@/components/core/tables/art-table/index.vue'
@@ -292,12 +292,12 @@
   }
 
   async function handleOpen(input: ScmSalesDocument | ScmSalesDocument[]): Promise<void> {
-    const records = normalizeQuotationSelection(input)
-    const record = records[0]
-    if (!record || new Set(records.map((item) => item.tenantId)).size !== 1) {
+    const selection = resolveSingleTenantQuotationSelection(input)
+    if (!selection) {
       ElMessage.warning('请按租户分别选择报价单')
       return
     }
+    const { record, records } = selection
     quotations.value = records
     selectedLines.value = []
     pendingLines.value = quotationActionLines(records)

@@ -20,6 +20,8 @@
         v-model="search"
         :search-items="searchItems"
         :api-fn="fetchPage"
+        :response-adapter="responseAdapter"
+        :on-success="acceptPage"
         :columns-factory="columnsFactory"
         :header-actions="headerActions"
         header-actions-placement="workspace"
@@ -27,8 +29,8 @@
         :table-props="{
           rowKey: 'id',
           tableLayout: 'fixed',
-          emptyText: '暂无报价项分类',
-          emptyDescription: '新增报价项后，项目报价即可引用分类与费用。'
+          emptyText: hasAppliedKeyword ? '没有符合条件的报价项分类' : '暂无报价项分类',
+          emptyDescription
         }"
         focusable
       />
@@ -61,6 +63,9 @@
   import BusinessWorkspaceHeader from '@/components/business/business-workspace-header/index.vue'
   import { loadAllDocumentPages } from '@/utils/business/document-detail-list'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
+  import type { ApiResponse } from '@/utils/table/table-cache'
+  import { defaultResponseAdapter } from '@/utils/table/table-utils'
+  import { useAuth } from '@/hooks/core/useAuth'
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
   import { useTenantScopeFormPolicy } from '@/hooks/core/useTenantScopeFormPolicy'
   import { useUserStore } from '@/store/modules/user'
@@ -83,6 +88,10 @@
 
   defineOptions({ name: 'ScmQuoteCategory' })
 
+  type PageResult = Awaited<ReturnType<typeof fetchQuoteCategories>> & { hasKeyword: boolean }
+  type TableResponse = ApiResponse<ScmQuoteCategory> & { hasKeyword: boolean }
+
+  const { hasAuth } = useAuth()
   const { isPlatformSuper } = storeToRefs(useUserStore())
   const tenantScopeStore = useTenantScopeStore()
   const { effectiveTenantId, tenantOptions: availableTenants } = storeToRefs(tenantScopeStore)
@@ -104,6 +113,13 @@
   }>()
   const detailDrawerRef = ref<{ handleOpen: (record: ScmQuoteCategory) => Promise<void> }>()
   const search = ref<QuoteCategoryQuery>({ keyword: '' })
+  const hasAppliedKeyword = ref(false)
+  const emptyDescription = computed(() => {
+    if (hasAppliedKeyword.value) return '可调整报价单号、项目或分类名称后再查询。'
+    return hasAuth('ScmQuoteCategory:Add')
+      ? '新增报价项后，项目报价即可引用分类与费用。'
+      : '可按报价单号、项目或分类名称查询已有报价项。'
+  })
   const importTenantId = computed(
     () => effectiveTenantId.value || search.value.tenantId || defaultWriteTenantId.value || ''
   )
@@ -143,7 +159,7 @@
       label: '项目/分类',
       key: 'keyword',
       type: 'input',
-      props: { clearable: true, placeholder: '输入报价单号、项目或分类名称' }
+      props: { clearable: true, placeholder: '单号/项目/分类' }
     }
   ])
 
@@ -199,10 +215,13 @@
       fixed: 'left',
       formatter: (row) => (
         <div class="min-w-0 leading-5">
-          <strong class="block truncate font-medium text-[var(--art-gray-900)]">
+          <strong
+            class="block truncate font-medium text-[var(--art-gray-900)]"
+            title={row.project?.projectName}
+          >
             {row.project?.projectName || '--'}
           </strong>
-          <small class="block truncate text-[var(--art-gray-600)]">
+          <small class="block truncate text-[var(--art-gray-600)]" title={row.project?.projectCode}>
             {row.project?.projectCode || '--'}
           </small>
         </div>
@@ -385,8 +404,20 @@
     )
   }
 
-  function fetchPage(query: QuoteCategoryQuery & { current: number; size: number }) {
-    return fetchQuoteCategories({ ...query, ...buildSupabasePageRange(query) })
+  async function fetchPage(
+    query: QuoteCategoryQuery & { current: number; size: number }
+  ): Promise<PageResult> {
+    const hasKeyword = Boolean(query.keyword?.trim())
+    const result = await fetchQuoteCategories({ ...query, ...buildSupabasePageRange(query) })
+    return { ...result, hasKeyword }
+  }
+
+  function responseAdapter(result: PageResult): TableResponse {
+    return { ...defaultResponseAdapter<ScmQuoteCategory>(result), hasKeyword: result.hasKeyword }
+  }
+
+  function acceptPage(_rows: ScmQuoteCategory[], result: TableResponse): void {
+    hasAppliedKeyword.value = result.hasKeyword
   }
 
   async function exportCategories(): Promise<Array<Record<string, unknown>>> {

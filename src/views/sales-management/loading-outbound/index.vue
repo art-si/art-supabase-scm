@@ -105,7 +105,10 @@
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
   import type { ColumnOption } from '@/types'
-  import { documentGroupSpan, groupDocumentLines } from '@/utils/business/document-detail-list'
+  import {
+    createDocumentGroupSpan,
+    groupDocumentLines
+  } from '@/utils/business/document-detail-list'
   import {
     fetchScmLoadingOutboundRows,
     fetchScmOutboundStocks,
@@ -175,23 +178,12 @@
     'outboundStatus',
     'operation'
   ])
-  function mergeDocumentCells({
-    rowIndex,
-    column
-  }: {
-    rowIndex: number
-    column: { property?: string }
-  }) {
-    return displayMode.value === 'line'
-      ? documentGroupSpan(
-          (tableRef.value?.dataState.rows.value as LoadingListRow[] | undefined) ?? [],
-          rowIndex,
-          column.property,
-          lineProperties,
-          (row) => row.loadingId
-        )
-      : ([1, 1] as [number, number])
-  }
+  const mergeDocumentCells = createDocumentGroupSpan(
+    () => displayMode.value,
+    () => tableRef.value?.dataState.rows.value as readonly LoadingListRow[] | undefined,
+    lineProperties,
+    (row) => row.loadingId
+  )
   const query = ref({
     displayMode: 'document' as 'document' | 'line',
     status: 'pending' as 'pending' | 'partial' | 'complete' | 'all',

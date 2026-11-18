@@ -1,0 +1,1 @@
+import{Ua as e,ga as t,wa as n}from"./sys-hO1PIVNn.js";import{t as r}from"./scm-document-workspace-BoFonRIw.js";var i=n({name:`ScmLoading`,__name:`index`,setup(n){return(n,i)=>(e(),t(r,{kind:`loading`}))}});export{i as default};
