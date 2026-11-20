@@ -138,16 +138,24 @@
     }
   ])
 
-  async function handleSubmit(): Promise<boolean> {
+  async function handleSubmit(
+    _data: OpenOptions,
+    api: ArtDialogExpose<OpenOptions>
+  ): Promise<boolean> {
     try {
       if (!(await formRef.value?.validate())) return false
-      if (recordId.value) await updateQuoteExpense(recordId.value, form.value)
+      const id = recordId.value
+      api.setOptions({ loadingText: '正在保存报价费用…' })
+      api.setLoading(true)
+      if (id) await updateQuoteExpense(id, form.value)
       else await createQuoteExpense(form.value)
-      emit('success', recordId.value ? 'edit' : 'add')
+      emit('success', id ? 'edit' : 'add')
       return true
     } catch {
       // API 边界已显示业务安全的错误；保留表单供用户修正。
       return false
+    } finally {
+      api.setLoading(false)
     }
   }
 
